@@ -1,0 +1,58 @@
+# I don't want the python virtual env in github!
+venv
+env
+.env
+
+# nor visual
+.vscode
+
+*.py[cod]
+
+# C extensions
+*.so
+*/__pychache__/*
+
+# Packages
+*.egg
+*.egg-info
+dist
+build
+eggs
+parts
+bin
+var
+sdist
+develop-eggs
+.installed.cfg
+lib
+lib64
+
+# Installer logs
+pip-log.txt
+
+# Unit test / coverage reports
+.coverage
+.tox
+nosetests.xml
+
+# Translations
+*.mo
+
+# Mr Developer
+.mr.developer.cfg
+.project
+.pydevproject
+
+# Output directory
+output/
+build/
+
+.DS_Store
+
+# ipython
+*.ipynb
+.ipynb_checkpoints/*
+
+
+# PyCharm
+.idea/*
