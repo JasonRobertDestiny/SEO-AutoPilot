@@ -461,22 +461,24 @@ class SEOAgent {
     }
 
     updateSEOScoreDisplay(data) {
-        const scoreElement = document.getElementById('seoScore');
-        const scoreCircle = document.getElementById('scoreCircle');
-        const scoreNumber = document.getElementById('scoreNumber');
-        const totalIssuesCount = document.getElementById('totalIssuesCount');
-        const criticalCount = document.getElementById('criticalCount');
-        const warningsCount = document.getElementById('warningsCount');
-        const passedCount = document.getElementById('passedCount');
-        const scoreDescription = document.getElementById('scoreDescription');
-        
-        const scoreData = this.currentAnalysis?.seo_score || this.calculateSEOScore(data);
-        let score = typeof scoreData === 'object' ? scoreData.score : scoreData || 75;
-        
-        // Professional color scheme based on score - defined at function scope
-        let color = '#ef4444';
-        let glowColor = 'rgba(239, 68, 68, 0.3)';
-        let grade = 'F';
+        // Add try-catch to prevent any color-related errors
+        try {
+            const scoreElement = document.getElementById('seoScore');
+            const scoreCircle = document.getElementById('scoreCircle');
+            const scoreNumber = document.getElementById('scoreNumber');
+            const totalIssuesCount = document.getElementById('totalIssuesCount');
+            const criticalCount = document.getElementById('criticalCount');
+            const warningsCount = document.getElementById('warningsCount');
+            const passedCount = document.getElementById('passedCount');
+            const scoreDescription = document.getElementById('scoreDescription');
+            
+            const scoreData = this.currentAnalysis?.seo_score || this.calculateSEOScore(data);
+            let score = typeof scoreData === 'object' ? scoreData.score : scoreData || 75;
+            
+            // Professional color scheme based on score - ALWAYS defined at function scope
+            let color = '#ef4444';
+            let glowColor = 'rgba(239, 68, 68, 0.3)';
+            let grade = 'F';
         
         if (score >= 90) {
             color = '#10b981';
@@ -602,6 +604,14 @@ class SEOAgent {
                     scoreContainer.style.transform = 'scale(1)';
                 }, 200);
             }, 1000);
+        }
+        } catch (error) {
+            console.error('Error in updateSEOScoreDisplay:', error);
+            // Fallback in case of any error
+            const scoreElement = document.getElementById('seoScore');
+            if (scoreElement) {
+                scoreElement.textContent = '75';
+            }
         }
     }
 
@@ -1340,7 +1350,7 @@ class SEOAgent {
             const downloadBtn = document.createElement('div');
             downloadBtn.className = 'download-btn mt-3';
             downloadBtn.innerHTML = `
-                <button onclick="this.click()" 
+                <button type="button" 
                         class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center">
                     <i class="fas fa-download mr-2"></i>
                     Download sitemap.xml
@@ -1349,14 +1359,20 @@ class SEOAgent {
             
             const downloadButton = downloadBtn.querySelector('button');
             downloadButton.addEventListener('click', () => {
-                const link = document.createElement('a');
-                link.href = downloadUrl;
-                link.download = 'sitemap.xml';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                this.showAlert('Sitemap downloaded! Upload it to your website root directory.', 'info');
+                try {
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = 'sitemap.xml';
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    this.showAlert('✅ Sitemap downloaded successfully! Upload it to your website root directory.', 'success');
+                } catch (error) {
+                    console.error('Download failed:', error);
+                    this.showAlert('❌ Download failed. Please try again or check your browser settings.', 'error');
+                }
             });
             
             resultsDiv.appendChild(downloadBtn);

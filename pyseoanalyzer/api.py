@@ -59,7 +59,11 @@ def serve_css():
 
 @app.route('/seo_agent.js')
 def serve_js():
-    return send_from_directory('templates', 'seo_agent.js')
+    response = send_from_directory('templates', 'seo_agent.js')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 def analyze_seo_issues(analysis_result):
     """分析SEO问题并生成预警和建议"""
