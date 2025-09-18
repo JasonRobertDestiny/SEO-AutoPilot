@@ -401,6 +401,171 @@ def generate_quick_recommendations(analysis_result):
     
     return recommendations[:10]  # 限制返回前10个建议
 
+def generate_strategic_recommendations(analysis_result, seo_score_data, llm_analysis=None):
+    """生成基于分析结果的智能战略建议"""
+    if not analysis_result or not analysis_result.get('pages'):
+        return []
+    
+    page = analysis_result['pages'][0]
+    score = seo_score_data.get('score', 0)
+    strategies = []
+    
+    # 基于SEO分数的战略等级
+    if score >= 80:
+        # 优秀网站 - 高级优化策略
+        strategies.extend([
+            {
+                'category': 'Advanced Optimization',
+                'priority': 'high',
+                'strategy': f'Your SEO is excellent ({score}/100)! Focus on advanced technical SEO and content expansion to maintain competitive edge.',
+                'action': 'Implement schema markup and optimize for featured snippets',
+                'impact': 'high',
+                'effort': 'medium'
+            },
+            {
+                'category': 'Content Strategy', 
+                'priority': 'medium',
+                'strategy': 'Build topical authority by creating comprehensive content clusters around your main keywords.',
+                'action': 'Develop 5-10 supporting articles for each main topic',
+                'impact': 'high',
+                'effort': 'high'
+            }
+        ])
+    elif score >= 60:
+        # 良好网站 - 中级优化策略
+        strategies.extend([
+            {
+                'category': 'Foundation Strengthening',
+                'priority': 'high', 
+                'strategy': f'Your SEO foundation is solid ({score}/100). Focus on addressing remaining technical issues for significant improvements.',
+                'action': 'Fix critical issues in meta descriptions and heading structure',
+                'impact': 'high',
+                'effort': 'low'
+            }
+        ])
+    else:
+        # 需要改进的网站 - 基础修复策略
+        strategies.extend([
+            {
+                'category': 'Critical Foundation',
+                'priority': 'critical',
+                'strategy': f'Your SEO needs immediate attention ({score}/100). Start with basic on-page elements for quick wins.',
+                'action': 'Fix missing title tags, meta descriptions, and H1 headings first',
+                'impact': 'very_high',
+                'effort': 'low'
+            }
+        ])
+    
+    # 基于具体问题的战略建议
+    title = page.get('title', '')
+    description = page.get('description', '')
+    h1_tags = page.get('h1', [])
+    
+    # 标题优化策略
+    if not title:
+        strategies.append({
+            'category': 'Title Optimization',
+            'priority': 'critical',
+            'strategy': 'Missing page title is severely hurting your search visibility.',
+            'action': 'Add a compelling 50-60 character title tag with your main keyword',
+            'impact': 'very_high',
+            'effort': 'low'
+        })
+    elif len(title) < 30:
+        strategies.append({
+            'category': 'Title Enhancement', 
+            'priority': 'high',
+            'strategy': f'Your title is too short ({len(title)} chars). Expand it to capture more search opportunities.',
+            'action': f'Extend "{title}" to 50-60 characters with relevant keywords',
+            'impact': 'high',
+            'effort': 'low'
+        })
+    
+    # 描述优化策略
+    if not description:
+        strategies.append({
+            'category': 'Meta Description',
+            'priority': 'critical', 
+            'strategy': 'Missing meta description means search engines write their own - often poorly.',
+            'action': 'Write a compelling 140-160 character description that includes your main keyword and a call to action',
+            'impact': 'high',
+            'effort': 'low'
+        })
+    elif len(description) < 120:
+        strategies.append({
+            'category': 'Description Enhancement',
+            'priority': 'high',
+            'strategy': f'Your meta description is too short ({len(description)} chars) and missing click-through opportunities.',
+            'action': 'Expand to 140-160 characters with benefit-focused language and call to action',
+            'impact': 'medium',
+            'effort': 'low'
+        })
+    
+    # 内容结构策略
+    if not h1_tags:
+        strategies.append({
+            'category': 'Content Structure',
+            'priority': 'critical',
+            'strategy': 'Missing H1 tag confuses search engines about your page topic.',
+            'action': 'Add a single, keyword-rich H1 tag that clearly describes your page topic',
+            'impact': 'high',
+            'effort': 'low'
+        })
+    
+    # 图片优化策略
+    images = page.get('images', [])
+    missing_alt = sum(1 for img in images if not img.get('alt'))
+    if missing_alt > 0:
+        strategies.append({
+            'category': 'Image Optimization',
+            'priority': 'high' if missing_alt > 3 else 'medium',
+            'strategy': f'{missing_alt} images lack alt text, missing accessibility and SEO opportunities.',
+            'action': f'Add descriptive alt text to all {missing_alt} images, focusing on your main keywords where relevant',
+            'impact': 'medium',
+            'effort': 'medium'
+        })
+    
+    # 集成LLM战略建议
+    if llm_analysis and 'recommendations' in llm_analysis:
+        llm_recs = llm_analysis.get('recommendations', {})
+        if isinstance(llm_recs, dict):
+            # 整合AI战略建议
+            ai_strategies = llm_recs.get('strategic_recommendations', [])
+            quick_wins = llm_recs.get('quick_wins', [])
+            
+            for ai_strategy in ai_strategies[:3]:  # 限制前3个AI建议
+                if isinstance(ai_strategy, str):
+                    strategies.append({
+                        'category': 'AI Strategy',
+                        'priority': 'medium',
+                        'strategy': ai_strategy,
+                        'action': 'Implement this AI-recommended strategy for advanced optimization',
+                        'impact': 'medium',
+                        'effort': 'medium'
+                    })
+            
+            for quick_win in quick_wins[:2]:  # 限制前2个快速获胜策略
+                if isinstance(quick_win, str):
+                    strategies.append({
+                        'category': 'Quick Win',
+                        'priority': 'high',
+                        'strategy': quick_win,
+                        'action': 'Implement immediately for quick SEO improvement',
+                        'impact': 'medium',
+                        'effort': 'low'
+                    })
+    
+    # 按优先级和影响力排序
+    priority_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+    impact_order = {'very_high': 0, 'high': 1, 'medium': 2, 'low': 3}
+    
+    strategies.sort(key=lambda x: (
+        priority_order.get(x.get('priority', 'medium'), 2),
+        impact_order.get(x.get('impact', 'medium'), 2)
+    ))
+    
+    return strategies[:8]  # 返回最重要的8个战略建议
+
 @app.route('/api/analyze', methods=['POST'])
 def api_analyze():
     """分析网站SEO并返回结果 - 优化版本"""
@@ -431,6 +596,13 @@ def api_analyze():
         # 第三阶段：生成核心建议（优化版本）
         recommendations = generate_quick_recommendations(analysis_result)
         
+        # 第四阶段：生成智能战略建议
+        strategic_recommendations = generate_strategic_recommendations(
+            analysis_result, 
+            seo_score, 
+            analysis_result.get('llm_analysis')
+        )
+        
         # 计算执行时间
         execution_time = time.time() - start_time
         
@@ -439,6 +611,7 @@ def api_analyze():
             'analysis': analysis_result,
             'seo_score': seo_score,
             'recommendations': recommendations,
+            'strategic_recommendations': strategic_recommendations,
             'performance': {
                 'execution_time': round(execution_time, 2),
                 'optimized': True

@@ -315,16 +315,36 @@ class SEOAgent {
             
             // 启动进度条动画，让用户知道系统在运行
             let currentProgress = 25;
+            let stepPhase = 1;
+            const progressMessages = [
+                { min: 25, max: 40, title: '🤖 AI Brain Analyzing...', message: 'Processing with SiliconFlow AI, please wait...', step: 2 },
+                { min: 40, max: 55, title: '🔍 Discovering SEO Secrets...', message: 'AI is analyzing content structure and keywords...', step: 2 },
+                { min: 55, max: 70, title: '⚡ Unleashing Optimization Power...', message: 'Generating personalized recommendations...', step: 3 },
+                { min: 70, max: 85, title: '🔮 AI Deep Analysis...', message: 'Finalizing strategic insights, almost complete...', step: 3 },
+                { min: 85, max: 98, title: '✨ Completing Analysis...', message: 'Preparing your intelligent SEO strategy...', step: 4 }
+            ];
+            
             progressInterval = setInterval(() => {
-                if (currentProgress < 90) {
-                    currentProgress += Math.random() * 2; // 随机增加1-2%
-                    if (currentProgress <= 70) {
-                        this.showLoadingProgress('🤖 AI Brain Analyzing...', 'Processing with SiliconFlow AI, please wait...', Math.min(currentProgress, 70), 2);
-                    } else {
-                        this.showLoadingProgress('🔮 AI Deep Analysis...', 'Advanced AI analysis in progress, almost done...', Math.min(currentProgress, 90), 3);
+                if (currentProgress < 98) {
+                    // 动态调整进度增长速度
+                    const increment = currentProgress < 85 ? Math.random() * 1.5 + 0.5 : Math.random() * 0.8 + 0.2;
+                    currentProgress += increment;
+                    
+                    // 找到当前进度对应的消息
+                    const currentPhase = progressMessages.find(phase => 
+                        currentProgress >= phase.min && currentProgress <= phase.max
+                    );
+                    
+                    if (currentPhase) {
+                        this.showLoadingProgress(
+                            currentPhase.title, 
+                            currentPhase.message, 
+                            Math.min(currentProgress, 98), 
+                            currentPhase.step
+                        );
                     }
                 }
-            }, 1200); // 每1.2秒更新一次，让用户感受到持续进度
+            }, 800); // 每0.8秒更新一次，更频繁的反馈
             
             const response = await fetch(`${this.apiBaseUrl}/analyze`, {
                 method: 'POST',
@@ -1047,27 +1067,208 @@ class SEOAgent {
         
         if (!container) return;
         
-        const tasks = [
-            'Review your content to match audience needs',
-            'Compare your traffic and rankings to competitors',
-            'Analyze your backlinks and find gaps compared to competitors',
-            'Ensure your site is fast, mobile-friendly, and easy to use',
-            'Set SEO goals and create a simple action plan',
-            'Track progress regularly and adjust as needed'
-        ];
+        // 使用动态战略建议，如果没有则使用默认模板
+        let strategies = [];
         
-        if (countElement) {
-            countElement.textContent = `${tasks.length} Tasks`;
+        if (this.currentAnalysis && this.currentAnalysis.strategic_recommendations) {
+            // 使用来自API的智能战略建议
+            strategies = this.currentAnalysis.strategic_recommendations;
+        } else {
+            // 回退到通用模板（如果没有分析数据）
+            strategies = [
+                {
+                    category: 'Content Review',
+                    strategy: 'Review your content to match audience needs',
+                    action: 'Analyze current content performance and identify gaps',
+                    priority: 'medium',
+                    impact: 'medium',
+                    effort: 'medium'
+                },
+                {
+                    category: 'Competitive Analysis',
+                    strategy: 'Compare your traffic and rankings to competitors',
+                    action: 'Use SEO tools to benchmark against top competitors',
+                    priority: 'medium',
+                    impact: 'high',
+                    effort: 'medium'
+                },
+                {
+                    category: 'Link Building',
+                    strategy: 'Analyze your backlinks and find gaps compared to competitors',
+                    action: 'Audit backlink profile and identify link building opportunities',
+                    priority: 'medium',
+                    impact: 'high',
+                    effort: 'high'
+                },
+                {
+                    category: 'Technical SEO',
+                    strategy: 'Ensure your site is fast, mobile-friendly, and easy to use',
+                    action: 'Run technical audit and fix core web vitals issues',
+                    priority: 'high',
+                    impact: 'high',
+                    effort: 'medium'
+                }
+            ];
         }
         
-        document.querySelectorAll('#seoStrategyTasks input[type="checkbox"]').forEach(checkbox => {
+        if (countElement) {
+            countElement.textContent = `${strategies.length} Strategies`;
+        }
+        
+        // 更新策略显示
+        this.renderStrategicRecommendations(strategies);
+    }
+
+    renderStrategicRecommendations(strategies) {
+        const container = document.getElementById('seoStrategyTasks');
+        if (!container) return;
+        
+        // 清除现有内容
+        container.innerHTML = '';
+        
+        strategies.forEach((strategy, index) => {
+            const priorityClass = this.getPriorityClass(strategy.priority || 'medium');
+            const impactBadge = this.getImpactBadge(strategy.impact || 'medium');
+            const effortBadge = this.getEffortBadge(strategy.effort || 'medium');
+            
+            const strategyElement = document.createElement('div');
+            strategyElement.className = 'strategy-card p-4 border rounded-lg hover:shadow-md transition-all duration-200 mb-4';
+            strategyElement.innerHTML = `
+                <div class="flex items-start justify-between">
+                    <div class="flex items-start flex-1">
+                        <input type="checkbox" class="strategy-checkbox mr-4 mt-1 h-4 w-4 text-purple-600 rounded" 
+                               data-strategy-index="${index}">
+                        <div class="flex-1">
+                            <div class="flex items-center mb-2">
+                                <span class="strategy-category text-sm font-medium text-purple-600 mr-2">
+                                    ${strategy.category || 'Strategy'}
+                                </span>
+                                <span class="priority-badge ${priorityClass}">${strategy.priority || 'medium'}</span>
+                                ${impactBadge}
+                                ${effortBadge}
+                            </div>
+                            <h4 class="strategy-title font-semibold text-gray-900 mb-2">
+                                ${strategy.strategy || strategy.action || 'Strategic recommendation'}
+                            </h4>
+                            <p class="strategy-action text-sm text-gray-600 mb-3">
+                                ${strategy.action || strategy.strategy || 'Implement this strategy for SEO improvement'}
+                            </p>
+                            <div class="strategy-links flex items-center space-x-4">
+                                <button class="add-to-todo-btn text-purple-600 hover:text-purple-800 text-sm font-medium transition-colors"
+                                        onclick="seoAgent.addStrategyToTodo(${index})">
+                                    <i class="fas fa-plus mr-1"></i>Add to TODO
+                                </button>
+                                <button class="link-to-analysis-btn text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+                                        onclick="seoAgent.linkToAnalysisSection('${strategy.category}')">
+                                    <i class="fas fa-link mr-1"></i>View Details
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(strategyElement);
+        });
+        
+        // 添加策略复选框事件监听器
+        this.bindStrategyCheckboxEvents();
+    }
+
+    getPriorityClass(priority) {
+        switch (priority.toLowerCase()) {
+            case 'critical': return 'bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium';
+            case 'high': return 'bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-medium';
+            case 'medium': return 'bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium';
+            case 'low': return 'bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium';
+            default: return 'bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs font-medium';
+        }
+    }
+
+    getImpactBadge(impact) {
+        const impactColors = {
+            'very_high': 'bg-purple-100 text-purple-800',
+            'high': 'bg-blue-100 text-blue-800',
+            'medium': 'bg-indigo-100 text-indigo-800',
+            'low': 'bg-gray-100 text-gray-800'
+        };
+        const colorClass = impactColors[impact] || impactColors['medium'];
+        return `<span class="${colorClass} px-2 py-1 rounded text-xs font-medium ml-1">Impact: ${impact.replace('_', ' ')}</span>`;
+    }
+
+    getEffortBadge(effort) {
+        const effortColors = {
+            'low': 'bg-green-100 text-green-800',
+            'medium': 'bg-yellow-100 text-yellow-800',
+            'high': 'bg-red-100 text-red-800'
+        };
+        const colorClass = effortColors[effort] || effortColors['medium'];
+        return `<span class="${colorClass} px-2 py-1 rounded text-xs font-medium ml-1">Effort: ${effort}</span>`;
+    }
+
+    bindStrategyCheckboxEvents() {
+        document.querySelectorAll('.strategy-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', (e) => {
-                const taskText = e.target.nextElementSibling.textContent;
-                if (e.target.checked) {
-                    this.addTodoFromRecommendation(taskText, 'medium');
+                const strategyIndex = parseInt(e.target.dataset.strategyIndex);
+                if (e.target.checked && this.currentAnalysis && this.currentAnalysis.strategic_recommendations) {
+                    const strategy = this.currentAnalysis.strategic_recommendations[strategyIndex];
+                    if (strategy) {
+                        this.addTodoFromRecommendation(
+                            `${strategy.category}: ${strategy.action || strategy.strategy}`, 
+                            strategy.priority || 'medium'
+                        );
+                    }
                 }
             });
         });
+    }
+
+    addStrategyToTodo(strategyIndex) {
+        if (this.currentAnalysis && this.currentAnalysis.strategic_recommendations) {
+            const strategy = this.currentAnalysis.strategic_recommendations[strategyIndex];
+            if (strategy) {
+                this.addTodoFromRecommendation(
+                    `${strategy.category}: ${strategy.action || strategy.strategy}`, 
+                    strategy.priority || 'medium'
+                );
+                this.showAlert('Strategy added to TODO list!', 'success');
+            }
+        }
+    }
+
+    linkToAnalysisSection(category) {
+        // 智能链接到相关分析部分
+        const sectionMap = {
+            'Title Optimization': 'seo-analysis',
+            'Title Enhancement': 'seo-analysis', 
+            'Meta Description': 'seo-analysis',
+            'Description Enhancement': 'seo-analysis',
+            'Content Structure': 'seo-analysis',
+            'Image Optimization': 'seo-analysis',
+            'Technical SEO': 'site-compliance',
+            'Link Building': 'links',
+            'Competitive Analysis': 'summary',
+            'Advanced Optimization': 'seo-analysis',
+            'Foundation Strengthening': 'summary',
+            'Critical Foundation': 'summary'
+        };
+        
+        const targetSection = sectionMap[category] || 'summary';
+        this.showSection(targetSection);
+        
+        // 显示提示消息
+        this.showAlert(`Switched to ${this.getSectionDisplayName(targetSection)} section for "${category}" details`, 'info');
+    }
+
+    getSectionDisplayName(sectionId) {
+        const displayNames = {
+            'summary': 'Summary',
+            'seo-analysis': 'SEO Analysis', 
+            'site-compliance': 'Site Compliance',
+            'links': 'Links',
+            'seo-strategy': 'Growth Strategies'
+        };
+        return displayNames[sectionId] || sectionId;
     }
 
     generateTodos(data) {
