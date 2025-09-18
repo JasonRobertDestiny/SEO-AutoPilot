@@ -305,12 +305,14 @@ class SEOAgent {
 
         this.showLoading(true);
         
+        let progressInterval = null;
+        
         try {
             this.showLoadingProgress('🔍 Step 1/4: Discovering your website', 'Establishing secure connection and crawling...', 25, 1);
             
             // 启动进度条动画，让用户知道系统在运行
             let currentProgress = 25;
-            const progressInterval = setInterval(() => {
+            progressInterval = setInterval(() => {
                 if (currentProgress < 70) {
                     currentProgress += Math.random() * 3; // 随机增加1-3%
                     this.showLoadingProgress('🤖 AI Brain Analyzing...', 'Processing with SiliconFlow AI, please wait...', Math.min(currentProgress, 70), 2);
@@ -326,7 +328,11 @@ class SEOAgent {
             });
 
             // 停止进度动画
-            clearInterval(progressInterval);
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+            
             this.showLoadingProgress('⚡ Step 2/4: Processing content', 'Extracting and analyzing page elements...', 75, 3);
             
             await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause for UX
@@ -367,8 +373,27 @@ class SEOAgent {
             
         } catch (error) {
             console.error('Analysis failed:', error);
-            this.showAlert('Analysis failed, please check network connection or URL', 'error');
+            
+            // Ensure progress interval is cleared in case of error
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+            
+            // Show more specific error message based on error type
+            let errorMessage = 'Analysis failed, please check network connection or URL';
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                errorMessage = 'Cannot connect to SEO analyzer API. Please ensure the server is running.';
+            } else if (error.message) {
+                errorMessage = `Analysis failed: ${error.message}`;
+            }
+            
+            this.showAlert(errorMessage, 'error');
         } finally {
+            // Final cleanup
+            if (progressInterval) {
+                clearInterval(progressInterval);
+            }
             this.showLoading(false);
         }
     }
@@ -409,8 +434,6 @@ class SEOAgent {
                 });
             }, 800);
             
-            // Show success indicator
-            this.showAlert('✨ SEO Analysis Complete! Comprehensive report generated.', 'success');
         }
     }
 
