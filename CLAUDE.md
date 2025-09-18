@@ -12,11 +12,11 @@ pip install -e .
 # Install dependencies from requirements.txt
 pip install -r requirements.txt
 
-# Install additional dependencies for Google integration (if needed)
-pip install google-api-python-client google-auth google-auth-oauthlib
-
 # Build package
 python -m build
+
+# Check version
+python-seo-analyzer --version
 ```
 
 ### Testing
@@ -42,6 +42,15 @@ pytest --cov=pyseoanalyzer --cov-report=html
 # Run specific test modules
 pytest tests/test_siliconflow_integration.py -v
 pytest tests/test_llm_analyst.py -v
+
+# Clean up test files after testing
+# Remove temporary test files and directories
+rm -rf test_output/
+rm -f test_*.html
+rm -f test_*.xml
+rm -f *.tmp
+find . -name "__pycache__" -type d -exec rm -rf {} +
+find . -name "*.pyc" -delete
 ```
 
 ### Docker Development
@@ -74,6 +83,11 @@ python-seo-analyzer http://example.com/ --run-llm-analysis
 
 # Web interface
 python -m pyseoanalyzer.api
+
+# Test sitemap generation API
+curl -X POST http://127.0.0.1:5000/api/generate-sitemap \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
 ```
 
 ### Environment Configuration
@@ -102,6 +116,17 @@ python -m pyseoanalyzer.api
 # Check web interface templates and assets
 ls pyseoanalyzer/templates/
 # Templates: index.html, seo_agent.js, seo_styles.css
+
+# Test API endpoints
+curl -X POST http://127.0.0.1:5000/api/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com", "run_llm_analysis": true}'
+
+curl -X GET http://127.0.0.1:5000/api/health
+
+curl -X GET http://127.0.0.1:5000/api/recommendations
+
+curl -X GET http://127.0.0.1:5000/api/thresholds
 ```
 
 ### Debugging and Development
@@ -116,8 +141,11 @@ python -c "from pyseoanalyzer.analyzer import analyze; print(analyze.__doc__)"
 # Check package version
 python -c "from pyseoanalyzer import __version__; print(__version__)"
 
-# Validate environment configuration
+# Validate environment configuration  
 python -c "from dotenv import load_dotenv; load_dotenv(); import os; print('API Keys configured:', bool(os.getenv('ANTHROPIC_API_KEY') or os.getenv('SILICONFLOW_API_KEY')))"
+
+# Run syntax check on all Python files
+find . -name "*.py" -not -path "./venv/*" -exec python -m py_compile {} \;
 ```
 
 ## Architecture Overview
@@ -161,6 +189,9 @@ python -c "from dotenv import load_dotenv; load_dotenv(); import os; print('API 
 - Real-time web dashboard with responsive design
 - SEO scoring and recommendations engine
 - Support for both synchronous and asynchronous analysis
+- XML sitemap generation endpoint (/api/generate-sitemap)
+- Health check and system status endpoints
+- Configuration management for SEO thresholds
 
 **automation.py** - Scheduled SEO analysis:
 - APScheduler-based automation system
@@ -191,6 +222,12 @@ python -c "from dotenv import load_dotenv; load_dotenv(); import os; print('API 
 - Priority-based task management
 - Implementation guidance with time estimates
 - Expected impact assessment
+
+**sitemap_generator.py** - XML sitemap generation:
+- Standards-compliant XML sitemap creation
+- URL prioritization based on SEO analysis
+- Integration with crawl data for comprehensive coverage
+- Support for multiple output formats
 
 ### New Components (Recent Additions)
 
@@ -328,7 +365,29 @@ gh run view --log
 - Historical performance trends
 - Multi-format report generation (HTML, JSON, CSV)
 
+**Sitemap Generation**:
+- Standards-compliant XML sitemap creation
+- URL prioritization based on SEO analysis results
+- Automated discovery of crawlable URLs
+- Integration with existing crawl infrastructure
+
 ## Development Workflow
+
+### Quick Start
+```bash
+# 1. Install package in development mode
+pip install -e .
+
+# 2. Copy environment configuration
+cp .env.example .env
+# Edit .env with your API keys (ANTHROPIC_API_KEY or SILICONFLOW_API_KEY)
+
+# 3. Run basic analysis
+python-seo-analyzer http://example.com/
+
+# 4. Start web interface
+python -m pyseoanalyzer.api
+```
 
 ### Project Structure
 ```
@@ -347,6 +406,7 @@ pyseoanalyzer/
 ├── enhanced_llm_analyst.py  # Advanced multi-source analysis
 ├── google_integrator.py     # Google APIs integration
 ├── seo_optimizer.py         # Actionable optimization plans
+├── sitemap_generator.py     # XML sitemap generation
 ├── stopwords.py             # Text processing utilities
 └── templates/               # Web interface assets
     ├── index.html          # Main dashboard

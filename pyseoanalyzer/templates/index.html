@@ -225,6 +225,11 @@
                             <i class="fas fa-lightbulb mr-2"></i>
                             💡 Growth Strategies
                         </a>
+                        <a href="#" class="nav-item flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-50"
+                           onclick="showSection('seo-tools')">
+                            <i class="fas fa-tools mr-2"></i>
+                            🛠️ SEO Tools
+                        </a>
                     </nav>
                 </div>
             </div>
@@ -655,6 +660,216 @@
                                 <a href="#" class="text-purple-600 hover:text-purple-800 text-sm font-medium">
                                     Read Guide <i class="fas fa-chevron-right ml-1"></i>
                                 </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEO Tools Section -->
+                <div id="seo-tools" class="analysis-section">
+                    <div class="bg-white rounded-lg shadow-sm p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-xl font-bold text-gray-900">🛠️ SEO Automation Tools</h3>
+                            <span class="text-sm text-gray-500">Generate & Deploy</span>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Sitemap Generator -->
+                            <div class="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                                <div class="flex items-center mb-4">
+                                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                                        <i class="fas fa-sitemap text-blue-600 text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-lg font-semibold text-gray-900">XML Sitemap Generator</h4>
+                                        <p class="text-sm text-gray-600">Generate compliant XML sitemap for search engines</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <ul class="text-sm text-gray-600 space-y-2">
+                                        <li class="flex items-center">
+                                            <i class="fas fa-check text-green-500 mr-2"></i>
+                                            Automatic URL discovery and crawling
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-check text-green-500 mr-2"></i>
+                                            Priority scoring based on page importance
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-check text-green-500 mr-2"></i>
+                                            Standards-compliant XML format
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-check text-green-500 mr-2"></i>
+                                            Instant download for manual upload
+                                        </li>
+                                    </ul>
+                                </div>
+                                
+                                <button id="generateSitemapBtn" 
+                                        class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center">
+                                    <i class="fas fa-download mr-2"></i>
+                                    <span>Generate & Download Sitemap</span>
+                                </button>
+                                
+                                <div id="sitemapStatus" class="mt-3 hidden">
+                                    <div class="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+                                        <div class="flex items-center">
+                                            <i class="fas fa-spinner fa-spin mr-2"></i>
+                                            <span id="sitemapStatusText">Generating sitemap...</span>
+                                        </div>
+                                        <div class="mt-2">
+                                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                                <div id="sitemapProgress" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="sitemapResults" class="mt-3 hidden">
+                                    <div class="text-sm bg-green-50 border border-green-200 p-3 rounded">
+                                        <div class="flex items-center text-green-800 mb-2">
+                                            <i class="fas fa-check-circle mr-2"></i>
+                                            <span class="font-medium">Sitemap Generated Successfully!</span>
+                                        </div>
+                                        <div class="text-green-700">
+                                            <p>📄 URLs Found: <span id="urlCount" class="font-medium">--</span></p>
+                                            <p>📊 File Size: <span id="fileSize" class="font-medium">--</span> KB</p>
+                                            <p>⏱️ Generation Time: <span id="generationTime" class="font-medium">--</span>s</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Robots.txt Generator (Coming Soon) -->
+                            <div class="border border-gray-200 rounded-lg p-6 opacity-60">
+                                <div class="flex items-center mb-4">
+                                    <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mr-4">
+                                        <i class="fas fa-robot text-orange-600 text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-lg font-semibold text-gray-900">Robots.txt Generator</h4>
+                                        <p class="text-sm text-gray-600">Generate optimized robots.txt file</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <ul class="text-sm text-gray-600 space-y-2">
+                                        <li class="flex items-center">
+                                            <i class="fas fa-clock text-gray-400 mr-2"></i>
+                                            Smart crawl directives
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-clock text-gray-400 mr-2"></i>
+                                            Sitemap reference inclusion
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-clock text-gray-400 mr-2"></i>
+                                            SEO-friendly rules
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-clock text-gray-400 mr-2"></i>
+                                            Best practice templates
+                                        </li>
+                                    </ul>
+                                </div>
+                                
+                                <button disabled class="w-full bg-gray-300 text-gray-600 px-4 py-3 rounded-lg font-medium cursor-not-allowed">
+                                    <i class="fas fa-clock mr-2"></i>
+                                    Coming Soon
+                                </button>
+                            </div>
+                            
+                            <!-- Alt Tag Optimizer (Coming Soon) -->
+                            <div class="border border-gray-200 rounded-lg p-6 opacity-60">
+                                <div class="flex items-center mb-4">
+                                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
+                                        <i class="fas fa-image text-purple-600 text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-lg font-semibold text-gray-900">Alt Tag Optimizer</h4>
+                                        <p class="text-sm text-gray-600">AI-powered alt text generation</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <ul class="text-sm text-gray-600 space-y-2">
+                                        <li class="flex items-center">
+                                            <i class="fas fa-clock text-gray-400 mr-2"></i>
+                                            AI-generated descriptions
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-clock text-gray-400 mr-2"></i>
+                                            Batch image processing
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-clock text-gray-400 mr-2"></i>
+                                            Accessibility compliance
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-clock text-gray-400 mr-2"></i>
+                                            SEO keyword integration
+                                        </li>
+                                    </ul>
+                                </div>
+                                
+                                <button disabled class="w-full bg-gray-300 text-gray-600 px-4 py-3 rounded-lg font-medium cursor-not-allowed">
+                                    <i class="fas fa-clock mr-2"></i>
+                                    Coming Soon
+                                </button>
+                            </div>
+                            
+                            <!-- Website Deployment (Coming Soon) -->
+                            <div class="border border-gray-200 rounded-lg p-6 opacity-60">
+                                <div class="flex items-center mb-4">
+                                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
+                                        <i class="fas fa-cloud-upload-alt text-green-600 text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-lg font-semibold text-gray-900">Auto Deploy</h4>
+                                        <p class="text-sm text-gray-600">Direct deployment to your website</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <ul class="text-sm text-gray-600 space-y-2">
+                                        <li class="flex items-center">
+                                            <i class="fas fa-clock text-gray-400 mr-2"></i>
+                                            FTP/SFTP integration
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-clock text-gray-400 mr-2"></i>
+                                            Secure credential management
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-clock text-gray-400 mr-2"></i>
+                                            Backup & rollback support
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-clock text-gray-400 mr-2"></i>
+                                            One-click deployment
+                                        </li>
+                                    </ul>
+                                </div>
+                                
+                                <button disabled class="w-full bg-gray-300 text-gray-600 px-4 py-3 rounded-lg font-medium cursor-not-allowed">
+                                    <i class="fas fa-clock mr-2"></i>
+                                    Coming Soon
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Information Panel -->
+                        <div class="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <div class="flex items-start">
+                                <i class="fas fa-info-circle text-blue-600 mt-1 mr-3"></i>
+                                <div class="text-sm text-blue-800">
+                                    <p class="font-medium mb-2">About SEO Automation Tools</p>
+                                    <p>These tools help automate common SEO tasks by analyzing your website and generating optimized files. 
+                                    The sitemap generator creates search engine compliant XML files that you can upload to your website. 
+                                    Future tools will provide direct deployment capabilities with proper security measures.</p>
+                                </div>
                             </div>
                         </div>
                     </div>

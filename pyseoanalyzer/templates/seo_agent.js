@@ -1,6 +1,6 @@
 class SEOAgent {
     constructor() {
-        this.apiBaseUrl = 'http://127.0.0.1:5000/api';
+        this.apiBaseUrl = `http://${window.location.hostname}:${window.location.port}/api`;
         this.currentAnalysis = null;
         this.todos = JSON.parse(localStorage.getItem('seoTodos')) || [];
         this.theme = localStorage.getItem('theme') || 'light';
@@ -16,6 +16,7 @@ class SEOAgent {
         this.initAnimations();
         this.initSectionNavigation();
         this.initUsageTracking();
+        this.checkApiHealth();
     }
 
     initTheme() {
@@ -250,6 +251,9 @@ class SEOAgent {
         document.getElementById('saveTodoBtn')?.addEventListener('click', () => this.saveTodo());
         document.getElementById('clearCompletedBtn')?.addEventListener('click', () => this.clearCompleted());
         
+        // Sitemap generation button
+        document.getElementById('generateSitemapBtn')?.addEventListener('click', () => this.generateSitemap());
+        
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 'Enter') {
                 this.analyzeWebsite();
@@ -304,6 +308,15 @@ class SEOAgent {
         try {
             this.showLoadingProgress('🔍 Step 1/4: Discovering your website', 'Establishing secure connection and crawling...', 25, 1);
             
+            // 启动进度条动画，让用户知道系统在运行
+            let currentProgress = 25;
+            const progressInterval = setInterval(() => {
+                if (currentProgress < 70) {
+                    currentProgress += Math.random() * 3; // 随机增加1-3%
+                    this.showLoadingProgress('🤖 AI Brain Analyzing...', 'Processing with SiliconFlow AI, please wait...', Math.min(currentProgress, 70), 2);
+                }
+            }, 1500); // 每1.5秒更新一次
+            
             const response = await fetch(`${this.apiBaseUrl}/analyze`, {
                 method: 'POST',
                 headers: {
@@ -312,15 +325,17 @@ class SEOAgent {
                 body: JSON.stringify({ url: url })
             });
 
-            this.showLoadingProgress('⚡ Step 2/4: Processing content', 'Extracting and analyzing page elements...', 50, 2);
+            // 停止进度动画
+            clearInterval(progressInterval);
+            this.showLoadingProgress('⚡ Step 2/4: Processing content', 'Extracting and analyzing page elements...', 75, 3);
             
-            await new Promise(resolve => setTimeout(resolve, 500)); // Brief pause for UX
+            await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause for UX
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            this.showLoadingProgress('🎯 Step 3/4: Calculating SEO score', 'Running AI-powered optimization analysis...', 75, 3);
+            this.showLoadingProgress('🎯 Step 3/4: Calculating SEO score', 'Running final optimization analysis...', 90, 4);
             
             const result = await response.json();
             
@@ -330,7 +345,7 @@ class SEOAgent {
             
             this.showLoadingProgress('✨ Step 4/4: Generating insights', 'Preparing your personalized SEO report...', 100, 4);
             
-            await new Promise(resolve => setTimeout(resolve, 800)); // Final pause for completion effect
+            await new Promise(resolve => setTimeout(resolve, 500)); // Final pause for completion effect
             
             // Usage tracking removed - unlimited free service
             
@@ -1150,6 +1165,192 @@ class SEOAgent {
                 '<i class="fas fa-rocket fa-spin mr-2"></i>Analyzing...' : 
                 '<i class="fas fa-rocket mr-2"></i>Analyze Now';
         }
+    }
+
+    async checkApiHealth() {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/health`, {
+                method: 'GET'
+            });
+            
+            if (!response.ok) {
+                console.warn('API health check failed:', response.status);
+            }
+        } catch (error) {
+            console.warn('API health check failed:', error);
+            // Don't show alert on page load, just log the warning
+        }
+    }
+
+    async generateSitemap() {
+        const urlInput = document.getElementById('urlInput');
+        const url = urlInput?.value?.trim();
+        
+        if (!url) {
+            this.showAlert('Please enter a valid website URL first', 'warning');
+            return;
+        }
+
+        const generateBtn = document.getElementById('generateSitemapBtn');
+        const statusDiv = document.getElementById('sitemapStatus');
+        const resultsDiv = document.getElementById('sitemapResults');
+        const statusText = document.getElementById('sitemapStatusText');
+        const progress = document.getElementById('sitemapProgress');
+        
+        // Hide results and show status
+        resultsDiv?.classList.add('hidden');
+        statusDiv?.classList.remove('hidden');
+        
+        // Disable button and show loading state
+        if (generateBtn) {
+            generateBtn.disabled = true;
+            generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i><span>Generating...</span>';
+        }
+        
+        try {
+            // Progress simulation for better UX
+            const progressSteps = [
+                { text: 'Crawling website...', progress: 25 },
+                { text: 'Discovering URLs...', progress: 50 },
+                { text: 'Analyzing page structure...', progress: 75 },
+                { text: 'Generating XML sitemap...', progress: 90 },
+                { text: 'Validating sitemap...', progress: 100 }
+            ];
+            
+            let stepIndex = 0;
+            const updateProgress = () => {
+                if (stepIndex < progressSteps.length) {
+                    const step = progressSteps[stepIndex];
+                    if (statusText) statusText.textContent = step.text;
+                    if (progress) progress.style.width = `${step.progress}%`;
+                    stepIndex++;
+                }
+            };
+            
+            // Start progress updates
+            updateProgress();
+            const progressInterval = setInterval(updateProgress, 800);
+            
+            const response = await fetch(`${this.apiBaseUrl}/generate-sitemap`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ url: url })
+            });
+
+            clearInterval(progressInterval);
+            
+            if (!response.ok) {
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                try {
+                    const errorData = await response.json();
+                    if (errorData.error) {
+                        errorMessage = errorData.error;
+                    }
+                } catch (e) {
+                    // If we can't parse the error response, use the status text
+                }
+                throw new Error(errorMessage);
+            }
+
+            const result = await response.json();
+            
+            if (result.error) {
+                throw new Error(result.error);
+            }
+            
+            // Hide status and show results
+            statusDiv?.classList.add('hidden');
+            resultsDiv?.classList.remove('hidden');
+            
+            // Update results
+            const urlCount = document.getElementById('urlCount');
+            const fileSize = document.getElementById('fileSize');
+            const generationTime = document.getElementById('generationTime');
+            
+            if (urlCount) urlCount.textContent = result.validation?.url_count || 'Unknown';
+            if (fileSize) fileSize.textContent = Math.round((result.validation?.size_bytes || 0) / 1024);
+            if (generationTime) generationTime.textContent = result.performance?.execution_time || 'Unknown';
+            
+            // Create download functionality
+            if (result.sitemap_xml) {
+                this.createSitemapDownload(result.sitemap_xml, result.website_url);
+            }
+            
+            this.showAlert('🎉 Sitemap generated successfully! Click to download.', 'success');
+            
+        } catch (error) {
+            console.error('Sitemap generation failed:', error);
+            statusDiv?.classList.add('hidden');
+            
+            let errorMessage = 'Sitemap generation failed';
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                errorMessage = 'Cannot connect to SEO analyzer API. Please ensure the server is running.';
+            } else if (error.message) {
+                errorMessage = `Sitemap generation failed: ${error.message}`;
+            }
+            
+            this.showAlert(errorMessage, 'error');
+        } finally {
+            // Reset button state
+            if (generateBtn) {
+                generateBtn.disabled = false;
+                generateBtn.innerHTML = '<i class="fas fa-download mr-2"></i><span>Generate & Download Sitemap</span>';
+            }
+        }
+    }
+
+    createSitemapDownload(sitemapXml, websiteUrl) {
+        // Create download link
+        const blob = new Blob([sitemapXml], { type: 'application/xml' });
+        const downloadUrl = URL.createObjectURL(blob);
+        
+        // Add download button to results section
+        const resultsDiv = document.getElementById('sitemapResults');
+        if (resultsDiv) {
+            const existingDownload = resultsDiv.querySelector('.download-btn');
+            if (existingDownload) {
+                existingDownload.remove();
+            }
+            
+            const downloadBtn = document.createElement('div');
+            downloadBtn.className = 'download-btn mt-3';
+            downloadBtn.innerHTML = `
+                <button onclick="this.click()" 
+                        class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center">
+                    <i class="fas fa-download mr-2"></i>
+                    Download sitemap.xml
+                </button>
+            `;
+            
+            const downloadButton = downloadBtn.querySelector('button');
+            downloadButton.addEventListener('click', () => {
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = 'sitemap.xml';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                this.showAlert('Sitemap downloaded! Upload it to your website root directory.', 'info');
+            });
+            
+            resultsDiv.appendChild(downloadBtn);
+        }
+        
+        // Auto-download option
+        setTimeout(() => {
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = 'sitemap.xml';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Cleanup blob URL
+            setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+        }, 500);
     }
 
     showAlert(message, type = 'info') {

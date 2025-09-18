@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask import Flask, request, jsonify, render_template, send_from_directory, Response
 from flask_cors import CORS
 import json
 import time
@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pyseoanalyzer.analyzer import analyze
 from pyseoanalyzer.seo_optimizer import SEOOptimizer
 from pyseoanalyzer.llm_analyst import enhanced_modern_analyze
+from pyseoanalyzer.sitemap_generator import SitemapGenerator, generate_sitemap_from_analysis
 
 app = Flask(__name__, template_folder='templates', static_folder='templates')
 CORS(app)
@@ -362,13 +363,15 @@ def api_analyze():
         # 记录开始时间
         start_time = time.time()
         
-        # 第一阶段：基础分析（快速执行）
+        # 第一阶段：基础分析（支持LLM分析）
+        run_llm_analysis = data.get('run_llm_analysis', True)  # 默认启用LLM分析
         analysis_result = analyze(
             url=url,
             sitemap_url=data.get('sitemap'),
             follow_links=False,  # 禁用链接跟踪以提高速度
             analyze_headings=True,
-            analyze_extra_tags=True
+            analyze_extra_tags=True,
+            run_llm_analysis=run_llm_analysis  # 启用SiliconFlow API分析
         )
         
         # 第二阶段：计算基础指标（轻量级）
@@ -397,6 +400,77 @@ def api_analyze():
     except Exception as e:
         print(f"Analysis error: {str(e)}")  # 调试输出
         return jsonify({'error': f'Analysis failed: {str(e)}'}), 500
+
+@app.route('/api/generate-sitemap', methods=['POST'])
+@app.route('/generate-sitemap', methods=['POST'])
+def api_generate_sitemap():
+    """生成XML站点地图"""
+    try:
+        data = request.get_json()
+        url = data.get('url')
+        
+        if not url:
+            return jsonify({'error': 'Missing URL parameter'}), 400
+        
+        # 记录开始时间
+        start_time = time.time()
+        
+        # 执行轻量级网站分析以获取URL列表 - 优化版本
+        analysis_result = analyze(
+            url=url,
+            sitemap_url=data.get('sitemap'),
+            follow_links=False,  # 禁用链接跟踪以提高速度
+            analyze_headings=False,  # 只生成sitemap，不需要详细分析
+            analyze_extra_tags=False,  # 只关注URL发现，不需要详细分析
+            run_llm_analysis=False  # sitemap生成不需要LLM分析
+        )
+        
+        # 生成站点地图
+        sitemap_xml = generate_sitemap_from_analysis(url, analysis_result)
+        
+        # 验证生成的站点地图
+        generator = SitemapGenerator()
+        validation_result = generator.validate_sitemap(sitemap_xml)
+        
+        # 计算执行时间
+        execution_time = time.time() - start_time
+        
+        if validation_result.get('valid'):
+            # 根据请求格式返回结果
+            if data.get('format') == 'download':
+                # 返回可下载的XML文件
+                return Response(
+                    sitemap_xml,
+                    mimetype='application/xml',
+                    headers={
+                        'Content-Disposition': f'attachment; filename=sitemap.xml',
+                        'Content-Type': 'application/xml; charset=utf-8'
+                    }
+                )
+            else:
+                # 返回JSON格式的结果（包含XML内容和元数据）
+                result = {
+                    'sitemap_xml': sitemap_xml,
+                    'validation': validation_result,
+                    'performance': {
+                        'execution_time': round(execution_time, 2),
+                        'url_count': validation_result.get('url_count', 0),
+                        'size_bytes': validation_result.get('size_bytes', 0)
+                    },
+                    'timestamp': datetime.now().isoformat(),
+                    'website_url': url
+                }
+                return jsonify(result)
+        else:
+            return jsonify({
+                'error': 'Generated sitemap failed validation',
+                'validation_error': validation_result.get('error'),
+                'execution_time': round(execution_time, 2)
+            }), 500
+    
+    except Exception as e:
+        print(f"Sitemap generation error: {str(e)}")  # 调试输出
+        return jsonify({'error': f'Sitemap generation failed: {str(e)}'}), 500
 
 @app.route('/api/recommendations', methods=['GET'])
 def get_recommendations():
@@ -435,4 +509,5 @@ def health_check():
 if __name__ == '__main__':
     # 根据环境变量决定是否启用调试模式
     debug_mode = os.environ.get('FLASK_ENV', 'development') == 'development'
-    app.run(debug=debug_mode, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('SEO_ANALYZER_PORT', 5000))
+    app.run(debug=debug_mode, host='0.0.0.0', port=port)
