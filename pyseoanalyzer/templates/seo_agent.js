@@ -473,6 +473,37 @@ class SEOAgent {
         const scoreData = this.currentAnalysis?.seo_score || this.calculateSEOScore(data);
         let score = typeof scoreData === 'object' ? scoreData.score : scoreData || 75;
         
+        // Professional color scheme based on score - defined at function scope
+        let color = '#ef4444';
+        let glowColor = 'rgba(239, 68, 68, 0.3)';
+        let grade = 'F';
+        
+        if (score >= 90) {
+            color = '#10b981';
+            glowColor = 'rgba(16, 185, 129, 0.4)';
+            grade = 'A+';
+        } else if (score >= 80) {
+            color = '#059669';
+            glowColor = 'rgba(5, 150, 105, 0.4)';
+            grade = 'A';
+        } else if (score >= 70) {
+            color = '#84cc16';
+            glowColor = 'rgba(132, 204, 22, 0.4)';
+            grade = 'B+';
+        } else if (score >= 60) {
+            color = '#eab308';
+            glowColor = 'rgba(234, 179, 8, 0.4)';
+            grade = 'B';
+        } else if (score >= 50) {
+            color = '#f59e0b';
+            glowColor = 'rgba(245, 158, 11, 0.4)';
+            grade = 'C';
+        } else if (score >= 40) {
+            color = '#f97316';
+            glowColor = 'rgba(249, 115, 22, 0.4)';
+            grade = 'D';
+        }
+        
         // Professional score animation with easing
         if (scoreElement && scoreNumber) {
             let currentScore = 0;
@@ -500,37 +531,6 @@ class SEOAgent {
             // Animate the circle progress
             scoreCircle.style.transition = 'stroke-dasharray 2s cubic-bezier(0.4, 0, 0.2, 1)';
             scoreCircle.style.strokeDasharray = `${progress}, ${circumference}`;
-            
-            // Professional color scheme based on score
-            let color = '#ef4444';
-            let glowColor = 'rgba(239, 68, 68, 0.3)';
-            let grade = 'F';
-            
-            if (score >= 90) {
-                color = '#10b981';
-                glowColor = 'rgba(16, 185, 129, 0.4)';
-                grade = 'A+';
-            } else if (score >= 80) {
-                color = '#059669';
-                glowColor = 'rgba(5, 150, 105, 0.4)';
-                grade = 'A';
-            } else if (score >= 70) {
-                color = '#84cc16';
-                glowColor = 'rgba(132, 204, 22, 0.4)';
-                grade = 'B+';
-            } else if (score >= 60) {
-                color = '#eab308';
-                glowColor = 'rgba(234, 179, 8, 0.4)';
-                grade = 'B';
-            } else if (score >= 50) {
-                color = '#f59e0b';
-                glowColor = 'rgba(245, 158, 11, 0.4)';
-                grade = 'C';
-            } else if (score >= 40) {
-                color = '#f97316';
-                glowColor = 'rgba(249, 115, 22, 0.4)';
-                grade = 'D';
-            }
             
             scoreCircle.style.stroke = color;
             scoreCircle.style.filter = `drop-shadow(0 0 8px ${glowColor})`;
