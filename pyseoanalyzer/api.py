@@ -13,6 +13,7 @@ from pyseoanalyzer.analyzer import analyze
 from pyseoanalyzer.seo_optimizer import SEOOptimizer
 from pyseoanalyzer.llm_analyst import enhanced_modern_analyze
 from pyseoanalyzer.sitemap_generator import SitemapGenerator, generate_sitemap_from_analysis
+from pyseoanalyzer.report_generator import SEOReportGenerator
 
 app = Flask(__name__, template_folder='templates', static_folder='templates')
 CORS(app)
@@ -215,72 +216,118 @@ def calculate_seo_score(analysis_result, seo_analysis):
         'status': 'excellent' if score >= 90 else 'good' if score >= 70 else 'needs_improvement'
     }
     
-def calculate_seo_score_fast(analysis_result):
-    """快速计算SEO分数 - 优化版本"""
+def calculate_seo_score_detailed(analysis_result):
+    """计算详细的SEO分数 - 使用加权算法"""
     if not analysis_result or not analysis_result.get('pages'):
         return {'score': 50, 'grade': 'D', 'status': 'needs_improvement'}
     
     page = analysis_result['pages'][0]
-    score = 100
-    issues = {'high': 0, 'medium': 0, 'low': 0}
+    scores = []
+    weights = {}
     
-    # 快速评分算法（简化版本）
-    # 标题检查
-    title = page.get('title', '')
-    if not title:
-        score -= 15
-        issues['high'] += 1
-    elif len(title) < 30 or len(title) > 60:
-        score -= 5
-        issues['medium'] += 1
+    # Title score (weight: 20%)
+    title_text = page.get('title', '')
+    title_length = len(title_text) if title_text else 0
+    if 50 <= title_length <= 60:
+        scores.append(100)
+    elif 30 <= title_length <= 70:
+        scores.append(80)
+    else:
+        scores.append(40)
+    weights['title'] = 0.20
     
-    # 描述检查
-    description = page.get('description', '')
-    if not description:
-        score -= 20
-        issues['high'] += 1
-    elif len(description) < 120:
-        score -= 10
-        issues['high'] += 1
+    # Description score (weight: 15%)  
+    desc_text = page.get('description', '')
+    desc_length = len(desc_text) if desc_text else 0
+    if 140 <= desc_length <= 160:
+        scores.append(100)
+    elif 120 <= desc_length <= 180:
+        scores.append(80)
+    else:
+        scores.append(40)
+    weights['description'] = 0.15
     
-    # H1检查
-    h1_tags = page.get('h1', [])
-    if not h1_tags:
-        score -= 15
-        issues['high'] += 1
+    # Headings score (weight: 15%)
+    headings = page.get('headings', {})
+    h1_count = len(headings.get('h1', [])) if headings else 0
+    if h1_count == 1:
+        scores.append(100)
+    elif h1_count == 0:
+        scores.append(20)
+    else:
+        scores.append(60)
+    weights['headings'] = 0.15
     
-    # 图片Alt检查
-    images = page.get('images', [])
-    missing_alt = sum(1 for img in images if not img.get('alt'))
-    if missing_alt > 0:
-        score -= min(missing_alt * 3, 15)
-        issues['high'] += min(missing_alt, 5)
+    # Images score - use warnings to determine missing alt tags (weight: 10%)
+    warnings = page.get('warnings', [])
+    image_warnings = [w for w in warnings if 'Image missing alt tag' in str(w)]
+    if len(image_warnings) == 0:
+        scores.append(100)
+    elif len(image_warnings) <= 2:
+        scores.append(70)
+    else:
+        scores.append(30)
+    weights['images'] = 0.10
     
-    # 确保分数不低于0
-    score = max(score, 0)
+    # Content score (weight: 25%)
+    word_count = page.get('word_count', 0)
+    if word_count >= 300:
+        scores.append(100)
+    elif word_count >= 150:
+        scores.append(80)
+    elif word_count >= 50:
+        scores.append(60)
+    else:
+        scores.append(30)
+    weights['content'] = 0.25
     
-    # 确定等级和状态
+    # Links/warnings score (weight: 15%)
+    if len(warnings) == 0:
+        scores.append(100)
+    elif len(warnings) <= 3:
+        scores.append(70)
+    else:
+        scores.append(40)
+    weights['links'] = 0.15
+    
+    # Calculate weighted average
+    if scores:
+        total_weight = sum(weights.values())
+        if total_weight > 0:
+            weighted_score = sum(score * weight for score, weight in zip(scores, weights.values())) / total_weight
+            score = round(weighted_score, 1)
+        else:
+            score = 0.0
+    else:
+        score = 0.0
+    
+    # Determine grade and status
     if score >= 90:
         grade = 'A+'
         status = 'excellent'
     elif score >= 80:
         grade = 'A'
-        status = 'good'
+        status = 'great'
     elif score >= 70:
+        grade = 'B+'
+        status = 'good'
+    elif score >= 60:
         grade = 'B'
         status = 'fair'
-    elif score >= 60:
+    elif score >= 50:
         grade = 'C'
         status = 'needs_improvement'
-    else:
+    elif score >= 40:
         grade = 'D'
+        status = 'poor'
+    else:
+        grade = 'F'
         status = 'critical'
     
     return {
         'score': score,
         'grade': grade,
-        'status': status,
-        'issues': issues
+        'status': status
     }
 
 def generate_quick_recommendations(analysis_result):
@@ -379,7 +426,7 @@ def api_analyze():
         )
         
         # 第二阶段：计算基础指标（轻量级）
-        seo_score = calculate_seo_score_fast(analysis_result)
+        seo_score = calculate_seo_score_detailed(analysis_result)
         
         # 第三阶段：生成核心建议（优化版本）
         recommendations = generate_quick_recommendations(analysis_result)
@@ -500,6 +547,74 @@ def manage_thresholds():
             return jsonify({'message': '阈值更新成功', 'thresholds': SEO_THRESHOLDS})
         except Exception as e:
             return jsonify({'error': str(e)}), 400
+
+@app.route('/api/generate-report', methods=['POST'])
+def api_generate_report():
+    """生成并下载SEO分析报告"""
+    try:
+        data = request.get_json()
+        
+        # 检查必需参数
+        url = data.get('url')
+        if not url:
+            return jsonify({'error': 'Missing URL parameter'}), 400
+        
+        # 获取报告格式，默认为HTML
+        report_format = data.get('format', 'html').lower()
+        
+        # 记录开始时间
+        start_time = time.time()
+        
+        # 检查是否提供了现有的分析数据
+        analysis_data = data.get('analysis_data')
+        
+        if not analysis_data:
+            # 如果没有提供分析数据，需要重新分析
+            run_llm_analysis = data.get('run_llm_analysis', True)
+            analysis_result = analyze(
+                url=url,
+                sitemap_url=data.get('sitemap'),
+                follow_links=False,
+                analyze_headings=True,
+                analyze_extra_tags=True,
+                run_llm_analysis=run_llm_analysis
+            )
+            
+            # 组装完整的分析数据
+            seo_score = calculate_seo_score_detailed(analysis_result)
+            recommendations = generate_quick_recommendations(analysis_result)
+            
+            analysis_data = {
+                'url': url,
+                'basic_seo_analysis': analysis_result.get('pages', [{}])[0] if analysis_result.get('pages') else {},
+                'llm_analysis': analysis_result.get('llm_analysis', {}),
+                'seo_score': seo_score,
+                'recommendations': recommendations,
+                'timestamp': datetime.now().isoformat()
+            }
+        
+        # 生成报告
+        report_generator = SEOReportGenerator()
+        report_result = report_generator.generate_report(analysis_data, report_format)
+        
+        # 计算执行时间
+        execution_time = time.time() - start_time
+        
+        # 返回下载响应
+        return Response(
+            report_result['content'],
+            mimetype=report_result['mimetype'],
+            headers={
+                'Content-Disposition': f'attachment; filename={report_result["filename"]}',
+                'Content-Type': f'{report_result["mimetype"]}; charset=utf-8',
+                'X-Generation-Time': str(round(execution_time, 2)),
+                'X-Report-Format': report_result['format']
+            }
+        )
+    
+    except Exception as e:
+        print(f"Report generation error: {str(e)}")
+        return jsonify({'error': f'Report generation failed: {str(e)}'}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
