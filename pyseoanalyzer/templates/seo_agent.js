@@ -254,6 +254,9 @@ class SEOAgent {
         // Sitemap generation button
         document.getElementById('generateSitemapBtn')?.addEventListener('click', () => this.generateSitemap());
         
+        // Report download button
+        document.getElementById('downloadReportBtn')?.addEventListener('click', () => this.downloadReport());
+        
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 'Enter') {
                 this.analyzeWebsite();
@@ -313,11 +316,15 @@ class SEOAgent {
             // 启动进度条动画，让用户知道系统在运行
             let currentProgress = 25;
             progressInterval = setInterval(() => {
-                if (currentProgress < 70) {
-                    currentProgress += Math.random() * 3; // 随机增加1-3%
-                    this.showLoadingProgress('🤖 AI Brain Analyzing...', 'Processing with SiliconFlow AI, please wait...', Math.min(currentProgress, 70), 2);
+                if (currentProgress < 90) {
+                    currentProgress += Math.random() * 2; // 随机增加1-2%
+                    if (currentProgress <= 70) {
+                        this.showLoadingProgress('🤖 AI Brain Analyzing...', 'Processing with SiliconFlow AI, please wait...', Math.min(currentProgress, 70), 2);
+                    } else {
+                        this.showLoadingProgress('🔮 AI Deep Analysis...', 'Advanced AI analysis in progress, almost done...', Math.min(currentProgress, 90), 3);
+                    }
                 }
-            }, 1500); // 每1.5秒更新一次
+            }, 1200); // 每1.2秒更新一次，让用户感受到持续进度
             
             const response = await fetch(`${this.apiBaseUrl}/analyze`, {
                 method: 'POST',
@@ -434,6 +441,12 @@ class SEOAgent {
                 });
             }, 800);
             
+        }
+        
+        // Enable download report button after analysis is complete
+        const downloadReportBtn = document.getElementById('downloadReportBtn');
+        if (downloadReportBtn) {
+            downloadReportBtn.disabled = false;
         }
     }
 
@@ -616,26 +629,98 @@ class SEOAgent {
     }
 
     calculateSEOScore(data) {
-        let score = 100;
+        // Use the same weighted scoring algorithm as the report generator for consistency
+        if (!data.pages || data.pages.length === 0) return 75; // Default fallback
         
-        if (data.pages && data.pages.length > 0) {
-            const page = data.pages[0];
-            
-            if (!page.title) score -= 15;
-            else if (page.title.length < 30 || page.title.length > 60) score -= 5;
-            
-            if (!page.description) score -= 20;
-            else if (page.description.length < 120 || page.description.length > 160) score -= 10;
-            
-            if (!page.h1 || page.h1.length === 0) score -= 15;
-            if (page.images && page.images.some(img => !img.alt)) score -= 10;
-            
-            if (page.warnings && page.warnings.length > 0) {
-                score -= Math.min(page.warnings.length * 5, 30);
+        const page = data.pages[0];
+        const scores = [];
+        const weights = {};
+        
+        // Title score (weight: 20%)
+        if (page.title !== undefined) {
+            const titleLength = page.title ? page.title.length : 0;
+            if (titleLength >= 50 && titleLength <= 60) {
+                scores.push(100);
+            } else if (titleLength >= 30 && titleLength <= 70) {
+                scores.push(80);
+            } else {
+                scores.push(40);
+            }
+            weights.title = 0.20;
+        }
+        
+        // Description score (weight: 15%)
+        if (page.description !== undefined) {
+            const descLength = page.description ? page.description.length : 0;
+            if (descLength >= 140 && descLength <= 160) {
+                scores.push(100);
+            } else if (descLength >= 120 && descLength <= 180) {
+                scores.push(80);
+            } else {
+                scores.push(40);
+            }
+            weights.description = 0.15;
+        }
+        
+        // Headings score (weight: 15%)
+        const h1Count = page.headings?.h1?.length || 0;
+        if (h1Count === 1) {
+            scores.push(100);
+        } else if (h1Count === 0) {
+            scores.push(20);
+        } else {
+            scores.push(60);
+        }
+        weights.headings = 0.15;
+        
+        // Images score - use warnings to determine missing alt tags (weight: 10%)
+        const warnings = page.warnings || [];
+        const imageWarnings = warnings.filter(w => typeof w === 'string' && w.includes('Image missing alt tag'));
+        if (imageWarnings.length === 0) {
+            scores.push(100);
+        } else if (imageWarnings.length <= 2) {
+            scores.push(70);
+        } else {
+            scores.push(30);
+        }
+        weights.images = 0.10;
+        
+        // Content score (weight: 25%)
+        const wordCount = page.word_count || 0;
+        if (wordCount >= 300) {
+            scores.push(100);
+        } else if (wordCount >= 150) {
+            scores.push(80);
+        } else if (wordCount >= 50) {
+            scores.push(60);
+        } else {
+            scores.push(30);
+        }
+        weights.content = 0.25;
+        
+        // Links/warnings score (weight: 15%)
+        if (warnings.length === 0) {
+            scores.push(100);
+        } else if (warnings.length <= 3) {
+            scores.push(70);
+        } else {
+            scores.push(40);
+        }
+        weights.links = 0.15;
+        
+        // Calculate weighted average
+        if (scores.length > 0) {
+            const totalWeight = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
+            if (totalWeight > 0) {
+                const weightedScore = scores.reduce((sum, score, index) => {
+                    const weightKey = Object.keys(weights)[index];
+                    return sum + (score * weights[weightKey]);
+                }, 0) / totalWeight;
+                return Math.round(weightedScore * 10) / 10; // Round to 1 decimal place
             }
         }
         
-        return Math.max(score, 0);
+        return 75.0; // Fallback score
     }
 
     analyzeIssues(data) {
@@ -1390,6 +1475,157 @@ class SEOAgent {
             // Cleanup blob URL
             setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
         }, 500);
+    }
+
+    async downloadReport() {
+        if (!this.currentAnalysis) {
+            this.showAlert('Please run an SEO analysis first before downloading a report', 'warning');
+            return;
+        }
+
+        const urlInput = document.getElementById('urlInput');
+        const url = urlInput?.value?.trim();
+        const formatSelect = document.getElementById('reportFormat');
+        const format = formatSelect?.value || 'html';
+
+        if (!url) {
+            this.showAlert('Please enter a valid website URL first', 'warning');
+            return;
+        }
+
+        const downloadBtn = document.getElementById('downloadReportBtn');
+        const statusDiv = document.getElementById('reportStatus');
+        const resultsDiv = document.getElementById('reportResults');
+        const statusText = document.getElementById('reportStatusText');
+        const progress = document.getElementById('reportProgress');
+
+        // Hide results and show status
+        resultsDiv?.classList.add('hidden');
+        statusDiv?.classList.remove('hidden');
+
+        // Disable button and show loading state
+        if (downloadBtn) {
+            downloadBtn.disabled = true;
+            downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i><span>Generating...</span>';
+        }
+
+        try {
+            // Progress simulation for better UX
+            const progressSteps = [
+                { text: 'Consolidating analysis data...', progress: 25 },
+                { text: 'Calculating comprehensive metrics...', progress: 50 },
+                { text: 'Generating professional report...', progress: 75 },
+                { text: 'Preparing download...', progress: 90 },
+                { text: 'Report ready!', progress: 100 }
+            ];
+
+            let stepIndex = 0;
+            const updateProgress = () => {
+                if (stepIndex < progressSteps.length) {
+                    const step = progressSteps[stepIndex];
+                    if (statusText) statusText.textContent = step.text;
+                    if (progress) progress.style.width = `${step.progress}%`;
+                    stepIndex++;
+                }
+            };
+
+            // Start progress updates
+            updateProgress();
+            const progressInterval = setInterval(updateProgress, 600);
+
+            // Prepare analysis data for report generation
+            const reportData = {
+                url: url,
+                format: format,
+                analysis_data: {
+                    url: url,
+                    basic_seo_analysis: this.currentAnalysis.analysis?.pages?.[0] || {},
+                    llm_analysis: this.currentAnalysis.analysis?.llm_analysis || {},
+                    seo_score: this.currentAnalysis.seo_score || {},
+                    recommendations: this.currentAnalysis.recommendations || [],
+                    timestamp: new Date().toISOString()
+                }
+            };
+
+            const response = await fetch(`${this.apiBaseUrl}/generate-report`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(reportData)
+            });
+
+            clearInterval(progressInterval);
+
+            if (!response.ok) {
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                try {
+                    const errorData = await response.json();
+                    if (errorData.error) {
+                        errorMessage = errorData.error;
+                    }
+                } catch (e) {
+                    // If we can't parse the error response, use the status text
+                }
+                throw new Error(errorMessage);
+            }
+
+            // Create download from response
+            const blob = await response.blob();
+            const filename = response.headers.get('Content-Disposition') 
+                ? response.headers.get('Content-Disposition').split('filename=')[1]?.replace(/"/g, '')
+                : `seo-report-${format}.${format === 'html' ? 'html' : format}`;
+            
+            const generationTime = response.headers.get('X-Generation-Time') || 'Unknown';
+            const reportFormat = response.headers.get('X-Report-Format') || format;
+
+            // Hide status and show results
+            statusDiv?.classList.add('hidden');
+            resultsDiv?.classList.remove('hidden');
+
+            // Update results
+            const reportFormatType = document.getElementById('reportFormatType');
+            const reportFileSize = document.getElementById('reportFileSize');
+            const reportGenerationTime = document.getElementById('reportGenerationTime');
+
+            if (reportFormatType) reportFormatType.textContent = reportFormat.toUpperCase();
+            if (reportFileSize) reportFileSize.textContent = Math.round(blob.size / 1024);
+            if (reportGenerationTime) reportGenerationTime.textContent = generationTime;
+
+            // Create and trigger download
+            const downloadUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = filename;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Cleanup blob URL
+            setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+
+            this.showAlert(`🎉 SEO Report downloaded successfully! Format: ${reportFormat.toUpperCase()}`, 'success');
+
+        } catch (error) {
+            console.error('Report generation failed:', error);
+            statusDiv?.classList.add('hidden');
+
+            let errorMessage = 'Report generation failed';
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                errorMessage = 'Cannot connect to SEO analyzer API. Please ensure the server is running.';
+            } else if (error.message) {
+                errorMessage = `Report generation failed: ${error.message}`;
+            }
+
+            this.showAlert(errorMessage, 'error');
+        } finally {
+            // Reset button state
+            if (downloadBtn) {
+                downloadBtn.disabled = false;
+                downloadBtn.innerHTML = '<i class="fas fa-download mr-2"></i><span>Download SEO Report</span>';
+            }
+        }
     }
 
     showAlert(message, type = 'info') {
