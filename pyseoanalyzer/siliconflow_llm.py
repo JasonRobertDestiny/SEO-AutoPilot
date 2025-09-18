@@ -95,6 +95,39 @@ class SiliconFlowLLM:
         else:
             return await self._comprehensive_analysis(seo_data)
     
+    def _parse_json_response(self, response: str) -> Dict[str, Any]:
+        """
+        Parse JSON response, handling markdown code blocks and other formatting.
+        
+        Args:
+            response: Raw response string from API
+            
+        Returns:
+            Parsed JSON dictionary
+        """
+        # Remove markdown code blocks if present
+        cleaned_response = response.strip()
+        
+        # Handle ```json ... ``` blocks
+        if cleaned_response.startswith('```json'):
+            # Find the JSON content between ```json and ```
+            start = cleaned_response.find('```json') + 7
+            end = cleaned_response.rfind('```')
+            if end > start:
+                cleaned_response = cleaned_response[start:end].strip()
+        elif cleaned_response.startswith('```'):
+            # Handle generic ``` blocks
+            start = cleaned_response.find('```') + 3
+            end = cleaned_response.rfind('```')
+            if end > start:
+                cleaned_response = cleaned_response[start:end].strip()
+        
+        # Remove any remaining markdown or extra whitespace
+        cleaned_response = cleaned_response.strip()
+        
+        # Try to parse the JSON
+        return json.loads(cleaned_response)
+    
     async def _analyze_entity_optimization(self, seo_data: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze entity optimization aspects."""
         prompt = f"""
@@ -122,7 +155,7 @@ class SiliconFlowLLM:
         response = await self._make_request(messages)
         
         try:
-            return json.loads(response)
+            return self._parse_json_response(response)
         except json.JSONDecodeError:
             logger.error(f"Failed to parse JSON response: {response}")
             return {
@@ -158,7 +191,7 @@ class SiliconFlowLLM:
         response = await self._make_request(messages)
         
         try:
-            return json.loads(response)
+            return self._parse_json_response(response)
         except json.JSONDecodeError:
             return {
                 "credibility_assessment": "分析失败",
@@ -194,7 +227,7 @@ class SiliconFlowLLM:
         response = await self._make_request(messages)
         
         try:
-            return json.loads(response)
+            return self._parse_json_response(response)
         except json.JSONDecodeError:
             return {
                 "conversation_readiness": "分析失败",
@@ -230,7 +263,7 @@ class SiliconFlowLLM:
         response = await self._make_request(messages)
         
         try:
-            return json.loads(response)
+            return self._parse_json_response(response)
         except json.JSONDecodeError:
             return {
                 "platform_coverage": {},
@@ -266,7 +299,7 @@ class SiliconFlowLLM:
         response = await self._make_request(messages)
         
         try:
-            return json.loads(response)
+            return self._parse_json_response(response)
         except json.JSONDecodeError:
             return {
                 "strategic_recommendations": [],
