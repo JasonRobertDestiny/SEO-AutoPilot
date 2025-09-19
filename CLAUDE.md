@@ -44,13 +44,27 @@ pytest tests/test_siliconflow_integration.py -v
 pytest tests/test_llm_analyst.py -v
 
 # Clean up test files after testing
-# Remove temporary test files and directories
 rm -rf test_output/
 rm -f test_*.html
 rm -f test_*.xml
 rm -f *.tmp
 find . -name "__pycache__" -type d -exec rm -rf {} +
 find . -name "*.pyc" -delete
+```
+
+### Linting and Code Quality
+```bash
+# Run ruff linting (recommended)
+ruff check pyseoanalyzer/
+
+# Fix auto-fixable issues
+ruff check --fix pyseoanalyzer/
+
+# Format code with ruff
+ruff format pyseoanalyzer/
+
+# Check type hints with mypy (if available)
+mypy pyseoanalyzer/ --ignore-missing-imports
 ```
 
 ### Docker Development
@@ -65,6 +79,9 @@ docker run --rm python-seo-analyzer http://example.com/
 docker run --rm -e ANTHROPIC_API_KEY="your_key" python-seo-analyzer http://example.com/ --run-llm-analysis
 # Or use Silicon Flow API
 docker run --rm -e SILICONFLOW_API_KEY="your_key" python-seo-analyzer http://example.com/ --run-llm-analysis
+
+# Run web interface in Docker
+docker run -p 5000:5000 --rm -e ANTHROPIC_API_KEY="your_key" python-seo-analyzer
 ```
 
 ### CLI Usage
@@ -237,6 +254,12 @@ find . -name "*.py" -not -path "./venv/*" -exec python -m py_compile {} \;
 - Async/await support for concurrent analysis
 - Automatic fallback and error handling
 
+**report_generator.py** - Comprehensive report generation:
+- Multi-format report generation (HTML, JSON, CSV, TXT)
+- Professional styling and formatting
+- Data visualization and charts
+- Executive summaries and detailed analytics
+
 ### Key Design Patterns
 
 **Dependency Injection**: The `analyze()` function accepts configuration parameters and passes them through the stack.
@@ -399,6 +422,7 @@ pyseoanalyzer/
 ├── page.py              # Individual page analysis
 ├── http_client.py       # HTTP client wrapper (urllib3)
 ├── llm_analyst.py       # Anthropic Claude integration
+├── report_generator.py      # Comprehensive report generation
 ├── siliconflow_llm.py   # Silicon Flow API integration
 ├── api.py               # Flask web interface
 ├── automation.py        # Scheduled analysis system

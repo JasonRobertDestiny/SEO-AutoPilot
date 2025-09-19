@@ -15,6 +15,7 @@ from urllib3.exceptions import HTTPError
 from .http_client import http
 from .llm_analyst import LLMSEOEnhancer
 from .stopwords import ENGLISH_STOP_WORDS
+from .professional_diagnostics import ProfessionalSEODiagnostics
 
 TOKEN_REGEX = re.compile(r"(?u)\b\w\w+\b")
 
@@ -69,6 +70,7 @@ class Page:
         analyze_extra_tags=False,
         encoding="utf-8",
         run_llm_analysis=False,
+        run_professional_analysis=True,
     ):
         """
         Variables go here, *not* outside of __init__
@@ -81,6 +83,7 @@ class Page:
         self.analyze_extra_tags = analyze_extra_tags
         self.encoding = encoding
         self.run_llm_analysis = run_llm_analysis
+        self.run_professional_analysis = run_professional_analysis
         self.title: str = ""
         self.author: str = ""
         self.description: str = ""
@@ -103,6 +106,9 @@ class Page:
 
         if run_llm_analysis:
             self.llm_analysis = {}
+
+        if run_professional_analysis:
+            self.professional_analysis = {}
 
         if analyze_headings:
             self.headings = {}
@@ -139,6 +145,9 @@ class Page:
 
         if self.run_llm_analysis:
             context["llm_analysis"] = self.llm_analysis
+
+        if self.run_professional_analysis:
+            context["professional_analysis"] = self.professional_analysis
 
         return context
 
@@ -285,8 +294,12 @@ class Page:
         if self.analyze_extra_tags:
             self.analyze_additional_tags(soup_unmodified)
 
+        if self.run_professional_analysis:
+            self.professional_analysis = self.use_professional_diagnostics(html_without_comments)
+
         if self.run_llm_analysis:
-            self.llm_analysis = self.use_llm_analyzer()
+            # Enhanced LLM analysis with professional diagnostic data
+            self.llm_analysis = self.use_enhanced_llm_analyzer()
 
         return True
 
@@ -297,6 +310,45 @@ class Page:
 
         llm_enhancer = LLMSEOEnhancer()
         return asyncio.run(llm_enhancer.enhance_seo_analysis(self.content))
+
+    def use_professional_diagnostics(self, html_content: str):
+        """
+        Use professional diagnostics engine for comprehensive SEO analysis
+        """
+        diagnostics = ProfessionalSEODiagnostics()
+        
+        # Prepare page data for professional analysis
+        page_data = {
+            'title': self.title,
+            'description': self.description,
+            'content': self.content,
+            'word_count': self.total_word_count,
+            'keywords': self.keywords,
+            'warnings': self.warnings
+        }
+        
+        return diagnostics.comprehensive_audit(self.url, html_content, page_data)
+
+    def use_enhanced_llm_analyzer(self):
+        """
+        Use enhanced LLM analyzer with professional diagnostic data
+        """
+        llm_enhancer = LLMSEOEnhancer()
+        
+        # Prepare comprehensive context for LLM analysis
+        enhanced_context = {
+            'basic_content': self.content,
+            'page_metadata': {
+                'title': self.title,
+                'description': self.description,
+                'word_count': self.total_word_count,
+                'url': self.url
+            },
+            'professional_diagnostics': self.professional_analysis if hasattr(self, 'professional_analysis') else None,
+            'traditional_warnings': self.warnings
+        }
+        
+        return asyncio.run(llm_enhancer.enhanced_professional_analysis(enhanced_context))
 
     def word_list_freq_dist(self, wordlist):
         freq = [wordlist.count(w) for w in wordlist]

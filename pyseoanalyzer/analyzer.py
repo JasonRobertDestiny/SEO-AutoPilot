@@ -16,6 +16,7 @@ def analyze(
     analyze_extra_tags=False,
     follow_links=True,
     run_llm_analysis=False,
+    run_professional_analysis=True,
     enable_google_integration=False,
 ):
     start_time = time.time()
@@ -35,6 +36,7 @@ def analyze(
         analyze_extra_tags=analyze_extra_tags,
         follow_links=follow_links,
         run_llm_analysis=run_llm_analysis,
+        run_professional_analysis=run_professional_analysis,
     )
 
     site.crawl()

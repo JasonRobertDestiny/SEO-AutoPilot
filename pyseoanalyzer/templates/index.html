@@ -211,6 +211,11 @@
                             🔍 Deep SEO Analysis
                         </a>
                         <a href="#" class="nav-item flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-50"
+                           onclick="showSection('professional-diagnostics')">
+                            <i class="fas fa-stethoscope mr-2"></i>
+                            🩺 Professional Diagnostics
+                        </a>
+                        <a href="#" class="nav-item flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-50"
                            onclick="showSection('site-compliance')">
                             <i class="fas fa-shield-alt mr-2"></i>
                             ✅ Technical Health Check
@@ -445,6 +450,11 @@
                             </div>
                             <p class="text-sm text-gray-600 mb-4">Total words: 376  2-word phrases: 34  3-word phrases: 34  4-word phrases: 33</p>
                             
+                            <!-- Keyword Density Chart -->
+                            <div class="chart-container mb-6">
+                                <canvas id="keywordDensityChart"></canvas>
+                            </div>
+                            
                             <div class="overflow-x-auto">
                                 <table class="min-w-full">
                                     <thead>
@@ -459,6 +469,41 @@
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Professional Diagnostics Section -->
+                <div id="professional-diagnostics" class="analysis-section">
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-xl font-bold text-gray-900">🩺 Professional SEO Diagnostics</h3>
+                            <div class="flex items-center">
+                                <span class="text-sm font-medium mr-2">Overall Score:</span>
+                                <div class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium" id="professionalScore">
+                                    <i class="fas fa-spinner fa-spin mr-2"></i>Analyzing...
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Category Scores -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6" id="categoryScores">
+                            <!-- Category scores will be populated here -->
+                        </div>
+
+                        <!-- Issues Summary -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="issuesSummary">
+                            <!-- Issues summary will be populated here -->
+                        </div>
+
+                        <!-- Professional Issues List -->
+                        <div id="professionalIssues">
+                            <!-- Professional issues will be populated here -->
+                        </div>
+
+                        <!-- Optimization Roadmap -->
+                        <div id="optimizationRoadmap" class="mt-6">
+                            <!-- Optimization roadmap will be populated here -->
                         </div>
                     </div>
                 </div>
