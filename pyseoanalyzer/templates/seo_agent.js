@@ -474,6 +474,7 @@ class SEOAgent {
         this.updateSiteInfo(data);
         this.updateSummarySection(data);
         this.updateSEOAnalysisSection(data);
+        this.updateProfessionalDiagnostics(data);
         this.updateComplianceSection(data);
         this.updateLinksSection(data);
         this.updateSEOStrategySection();
@@ -505,10 +506,50 @@ class SEOAgent {
             const passedCount = document.getElementById('passedCount');
             const scoreDescription = document.getElementById('scoreDescription');
             
-            const scoreData = this.currentAnalysis?.seo_score || this.calculateSEOScore(data);
-            let score = typeof scoreData === 'object' ? scoreData.score : scoreData || 75;
+            // UNIFIED SCORING SYSTEM - Priority Order with Debug Logging
+            let score = 75; // Default fallback
+            let scoreSource = 'fallback';
             
-            // Professional color scheme based on score - ALWAYS defined at function scope
+            console.log('=== SEO Score Debug Info ===');
+            console.log('Current Analysis Object:', this.currentAnalysis);
+            console.log('Data Parameter:', data);
+            
+            // PRIORITY 1: Professional Analysis Overall Score (Most Accurate)
+            const professionalScore = this.currentAnalysis?.analysis?.pages?.[0]?.professional_analysis?.overall_score;
+            if (professionalScore !== undefined && professionalScore !== null && !isNaN(professionalScore)) {
+                score = Math.round(professionalScore * 10) / 10; // Round to 1 decimal
+                scoreSource = 'professional_analysis';
+                console.log('✅ Using Professional Analysis Score:', score);
+            }
+            
+            // PRIORITY 2: Backend SEO Score (Detailed Calculation)
+            else if (this.currentAnalysis?.seo_score !== undefined) {
+                const scoreData = this.currentAnalysis.seo_score;
+                if (typeof scoreData === 'object' && scoreData.score !== undefined) {
+                    score = Math.round(scoreData.score * 10) / 10;
+                    scoreSource = 'backend_detailed';
+                    console.log('✅ Using Backend Detailed Score:', score);
+                } else if (typeof scoreData === 'number') {
+                    score = Math.round(scoreData * 10) / 10;
+                    scoreSource = 'backend_number';
+                    console.log('✅ Using Backend Number Score:', score);
+                }
+            }
+            
+            // PRIORITY 3: Frontend Calculation (Last Resort)
+            else {
+                score = this.calculateSEOScore(data);
+                scoreSource = 'frontend_calculation';
+                console.log('⚠️ Using Frontend Calculation Score:', score);
+            }
+            
+            // Ensure score is within valid range
+            score = Math.max(0, Math.min(100, score));
+            
+            console.log('Final Score Used:', score, 'Source:', scoreSource);
+            console.log('=== End Score Debug ===');
+            
+            // Professional color scheme based on score
             let color = '#ef4444';
             let glowColor = 'rgba(239, 68, 68, 0.3)';
             let grade = 'F';
@@ -541,21 +582,10 @@ class SEOAgent {
         
         // Professional score animation with easing
         if (scoreElement && scoreNumber) {
-            let currentScore = 0;
-            const increment = score / 30; // Animate over 30 frames
-            const animateScore = () => {
-                currentScore += increment;
-                if (currentScore >= score) {
-                    currentScore = score;
-                    scoreElement.textContent = Math.round(score);
-                    scoreNumber.textContent = Math.round(score);
-                } else {
-                    scoreElement.textContent = Math.round(currentScore);
-                    scoreNumber.textContent = Math.round(currentScore);
-                    requestAnimationFrame(animateScore);
-                }
-            };
-            requestAnimationFrame(animateScore);
+            scoreElement.textContent = score.toFixed(1);
+            scoreNumber.textContent = Math.round(score);
+            scoreElement.style.color = color;
+            scoreNumber.style.color = color;
         }
         
         // Enhanced circular progress with gradient and glow effects
@@ -578,8 +608,21 @@ class SEOAgent {
             }
         }
         
-        // Enhanced issues analysis with better categorization
-        const issues = this.analyzeIssues(data);
+        // Update issues count display - prioritize professional analysis
+        const professionalAnalysis = this.currentAnalysis?.analysis?.pages?.[0]?.professional_analysis;
+        let issues = { critical: 0, warnings: 0, passed: 0 };
+        
+        if (professionalAnalysis && professionalAnalysis.issues_summary) {
+            const issuesSummary = professionalAnalysis.issues_summary;
+            issues = {
+                critical: issuesSummary.critical || 0,
+                warnings: (issuesSummary.high || 0) + (issuesSummary.medium || 0),
+                passed: Math.max(0, 150 - (issuesSummary.total_issues || 0)) // Professional analysis ~150 checks
+            };
+        } else {
+            // Fallback to basic analysis
+            issues = this.analyzeIssues(data);
+        }
         
         if (criticalCount) {
             criticalCount.textContent = issues.critical;
@@ -600,7 +643,7 @@ class SEOAgent {
             const totalIssues = issues.critical + issues.warnings;
             totalIssuesCount.textContent = totalIssues;
             
-            // Professional description with dynamic messaging
+            // Professional description with dynamic messaging and source indicator
             if (scoreDescription) {
                 let statusMessage = '';
                 if (score >= 90) {
@@ -618,10 +661,11 @@ class SEOAgent {
                 scoreDescription.innerHTML = `
                     <p class="text-gray-700 mb-2">${statusMessage}</p>
                     <p class="text-sm text-gray-600">
-                        SEO Score: <strong class="text-gray-900" style="color: ${color}">${Math.round(score)}/100</strong> | 
+                        SEO Score: <strong class="text-gray-900" style="color: ${color}">${score.toFixed(1)}/100</strong> | 
                         Issues to fix: <strong class="text-red-600">${totalIssues}</strong> | 
                         Checks passed: <strong class="text-green-600">${issues.passed}</strong>
                     </p>
+                    <p class="text-xs text-gray-500 mt-1">Score source: ${scoreSource}</p>
                 `;
             }
         }
@@ -640,10 +684,16 @@ class SEOAgent {
         }
         } catch (error) {
             console.error('Error in updateSEOScoreDisplay:', error);
+            console.error('Error details:', {
+                currentAnalysis: this.currentAnalysis,
+                data: data,
+                errorStack: error.stack
+            });
             // Fallback in case of any error
             const scoreElement = document.getElementById('seoScore');
             if (scoreElement) {
-                scoreElement.textContent = '75';
+                scoreElement.textContent = '75.0';
+                scoreElement.style.color = '#f59e0b';
             }
         }
     }
@@ -950,6 +1000,179 @@ class SEOAgent {
         }
     }
 
+    updateProfessionalDiagnostics(data) {
+        // Check if professional analysis data exists
+        if (!data.pages || !data.pages[0] || !data.pages[0].professional_analysis) {
+            // Hide professional diagnostics section if no data
+            const professionalSection = document.getElementById('professional-diagnostics');
+            if (professionalSection) {
+                const score = document.getElementById('professionalScore');
+                if (score) score.innerHTML = '<i class="fas fa-info-circle mr-2"></i>Not Available';
+                
+                const categoryScores = document.getElementById('categoryScores');
+                if (categoryScores) categoryScores.innerHTML = '<p class="text-gray-500 col-span-full text-center py-8">Professional diagnostics data not available for this analysis.</p>';
+            }
+            return;
+        }
+
+        const professionalData = data.pages[0].professional_analysis;
+        
+        // Update overall score
+        const scoreElement = document.getElementById('professionalScore');
+        if (scoreElement && professionalData.overall_score !== undefined) {
+            const score = Math.round(professionalData.overall_score);
+            const grade = professionalData.grade || this.getGradeFromScore(score);
+            const colorClass = score >= 80 ? 'bg-green-100 text-green-800' : 
+                              score >= 60 ? 'bg-yellow-100 text-yellow-800' : 
+                              'bg-red-100 text-red-800';
+            scoreElement.className = `inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${colorClass}`;
+            scoreElement.innerHTML = `${score}/100 (${grade})`;
+        }
+
+        // Update category scores
+        const categoryScoresElement = document.getElementById('categoryScores');
+        if (categoryScoresElement && professionalData.category_scores) {
+            categoryScoresElement.innerHTML = Object.entries(professionalData.category_scores).map(([key, category]) => {
+                const score = Math.round(category.score);
+                const colorClass = score >= 80 ? 'border-green-200 bg-green-50' : 
+                                  score >= 60 ? 'border-yellow-200 bg-yellow-50' : 
+                                  'border-red-200 bg-red-50';
+                const iconColor = score >= 80 ? 'text-green-600' : 
+                                 score >= 60 ? 'text-yellow-600' : 
+                                 'text-red-600';
+                
+                return `
+                    <div class="border ${colorClass} rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="text-sm font-medium text-gray-900 capitalize">${category.category.replace(/_/g, ' ')}</h4>
+                            <i class="fas fa-circle ${iconColor}"></i>
+                        </div>
+                        <div class="text-2xl font-bold text-gray-900 mb-1">${score}/100</div>
+                        <div class="text-xs text-gray-500">
+                            ${category.issues_found} issues found
+                            ${category.critical_issues > 0 ? `<span class="text-red-600">(${category.critical_issues} critical)</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Update issues summary
+        const issuesSummaryElement = document.getElementById('issuesSummary');
+        if (issuesSummaryElement && professionalData.issues_summary) {
+            const summary = professionalData.issues_summary;
+            issuesSummaryElement.innerHTML = `
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-gray-900">${summary.total_issues || 0}</div>
+                    <div class="text-sm text-gray-500">Total Issues</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-red-600">${summary.critical || 0}</div>
+                    <div class="text-sm text-gray-500">Critical</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-yellow-600">${summary.high || 0}</div>
+                    <div class="text-sm text-gray-500">High Priority</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-blue-600">${summary.medium || 0}</div>
+                    <div class="text-sm text-gray-500">Medium Priority</div>
+                </div>
+            `;
+        }
+
+        // Update professional issues list
+        const professionalIssuesElement = document.getElementById('professionalIssues');
+        if (professionalIssuesElement && professionalData.all_issues) {
+            const issues = professionalData.all_issues.slice(0, 10); // Show top 10 issues
+            if (issues.length > 0) {
+                professionalIssuesElement.innerHTML = `
+                    <div class="mb-4">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-4">Top Priority Issues</h4>
+                        <div class="space-y-3">
+                            ${issues.map(issue => {
+                                const priorityColor = {
+                                    'critical': 'border-red-500 bg-red-50',
+                                    'high': 'border-orange-500 bg-orange-50', 
+                                    'medium': 'border-yellow-500 bg-yellow-50',
+                                    'low': 'border-blue-500 bg-blue-50'
+                                }[issue.priority] || 'border-gray-500 bg-gray-50';
+                                
+                                const iconColor = {
+                                    'critical': 'text-red-600',
+                                    'high': 'text-orange-600',
+                                    'medium': 'text-yellow-600', 
+                                    'low': 'text-blue-600'
+                                }[issue.priority] || 'text-gray-600';
+                                
+                                return `
+                                    <div class="border-l-4 ${priorityColor} p-4 rounded-r-lg">
+                                        <div class="flex items-start">
+                                            <i class="fas fa-exclamation-triangle ${iconColor} mt-1 mr-3"></i>
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-900">${issue.title}</h5>
+                                                <p class="text-sm text-gray-600 mt-1">${issue.description}</p>
+                                                <p class="text-sm text-blue-600 mt-2"><strong>Recommendation:</strong> ${issue.recommendation}</p>
+                                                <div class="flex items-center mt-2 text-xs text-gray-500">
+                                                    <span class="mr-4">Impact: ${Math.round(issue.impact_score)}/100</span>
+                                                    <span class="mr-4">Effort: ${Math.round(issue.effort_score)}/100</span>
+                                                    <span>ROI: ${Math.round(issue.roi_score * 10)/10}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                professionalIssuesElement.innerHTML = '<p class="text-green-600 text-center py-8"><i class="fas fa-check-circle mr-2"></i>No critical issues found! Your website is in excellent shape.</p>';
+            }
+        }
+
+        // Update optimization roadmap
+        const optimizationRoadmapElement = document.getElementById('optimizationRoadmap');
+        if (optimizationRoadmapElement && professionalData.optimization_roadmap) {
+            const roadmap = professionalData.optimization_roadmap;
+            optimizationRoadmapElement.innerHTML = `
+                <div>
+                    <h4 class="text-lg font-semibold text-gray-800 mb-4">📋 Optimization Roadmap</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        ${Object.entries(roadmap).map(([phase, data], index) => {
+                            const phaseNumber = index + 1;
+                            const colorClass = index === 0 ? 'border-red-200 bg-red-50' :
+                                              index === 1 ? 'border-yellow-200 bg-yellow-50' :
+                                              'border-blue-200 bg-blue-50';
+                            return `
+                                <div class="border ${colorClass} rounded-lg p-4">
+                                    <h5 class="font-medium text-gray-900 mb-2">Phase ${phaseNumber}</h5>
+                                    <p class="text-sm text-gray-600 mb-2">${data.duration}</p>
+                                    <p class="text-sm text-gray-600 mb-3">Expected Impact: ${data.expected_impact}</p>
+                                    <div class="text-xs text-gray-500">${data.issues ? data.issues.length : 0} issues to address</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    getGradeFromScore(score) {
+        if (score >= 90) return 'A+';
+        if (score >= 85) return 'A';
+        if (score >= 80) return 'A-';
+        if (score >= 75) return 'B+';
+        if (score >= 70) return 'B';
+        if (score >= 65) return 'B-';
+        if (score >= 60) return 'C+';
+        if (score >= 55) return 'C';
+        if (score >= 50) return 'C-';
+        if (score >= 40) return 'D';
+        return 'F';
+    }
+
     updateComplianceSection(data) {
         if (!data.pages || data.pages.length === 0) return;
         
@@ -1026,39 +1249,133 @@ class SEOAgent {
     }
 
     extractInternalLinks(data) {
-        if (data.pages && data.pages[0] && data.pages[0].links) {
-            const baseUrl = new URL(data.pages[0].url);
-            return data.pages[0].links.filter(link => {
+        if (data.pages && data.pages[0]) {
+            const page = data.pages[0];
+            const baseUrl = new URL(page.url);
+            
+            // Check for different possible data structures
+            let links = [];
+            
+            // If links array exists (from page.links)
+            if (page.links && Array.isArray(page.links)) {
+                // Handle simple URL strings from backend
+                links = page.links.map(linkUrl => ({
+                    href: linkUrl,
+                    text: '',
+                    anchor: '[No anchor text]'
+                }));
+            }
+            
+            // If internal_links array exists (structured data)
+            if (page.internal_links && Array.isArray(page.internal_links)) {
+                links = page.internal_links;
+            }
+            
+            // Re-extract from HTML if available
+            if (links.length === 0 && page.html_content) {
+                links = this.extractLinksFromHTML(page.html_content, baseUrl, true);
+            }
+            
+            // Filter for internal links and format properly
+            return links.filter(link => {
                 try {
-                    const linkUrl = new URL(link.href, baseUrl);
+                    const linkUrl = new URL(link.href || link.url || link, baseUrl);
                     return linkUrl.hostname === baseUrl.hostname;
                 } catch {
                     return false;
                 }
             }).map(link => ({
-                url: link.href,
-                anchor: link.text || link.anchor || '[No anchor text]'
+                url: link.href || link.url || link,
+                anchor: link.text || link.anchor || link.title || '[No anchor text]'
             }));
         }
         return null;
     }
 
     extractExternalLinks(data) {
-        if (data.pages && data.pages[0] && data.pages[0].links) {
-            const baseUrl = new URL(data.pages[0].url);
-            return data.pages[0].links.filter(link => {
+        if (data.pages && data.pages[0]) {
+            const page = data.pages[0];
+            const baseUrl = new URL(page.url);
+            
+            // Check for different possible data structures
+            let links = [];
+            
+            // If links array exists (from page.links)
+            if (page.links && Array.isArray(page.links)) {
+                // Handle simple URL strings from backend
+                links = page.links.map(linkUrl => ({
+                    href: linkUrl,
+                    text: '',
+                    anchor: '[No anchor text]'
+                }));
+            }
+            
+            // If external_links array exists (structured data)
+            if (page.external_links && Array.isArray(page.external_links)) {
+                links = page.external_links;
+            }
+            
+            // Re-extract from HTML if available
+            if (links.length === 0 && page.html_content) {
+                links = this.extractLinksFromHTML(page.html_content, baseUrl, false);
+            }
+            
+            // Filter for external links and format properly
+            return links.filter(link => {
                 try {
-                    const linkUrl = new URL(link.href, baseUrl);
+                    const linkUrl = new URL(link.href || link.url || link, baseUrl);
                     return linkUrl.hostname !== baseUrl.hostname;
                 } catch {
                     return false;
                 }
             }).map(link => ({
-                url: link.href,
-                anchor: link.text || link.anchor || '[No anchor text]'
+                url: link.href || link.url || link,
+                anchor: link.text || link.anchor || link.title || '[No anchor text]'
             }));
         }
         return null;
+    }
+
+    extractLinksFromHTML(htmlContent, baseUrl, isInternal) {
+        try {
+            // Create a temporary DOM parser
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlContent, 'text/html');
+            const links = [];
+            
+            // Extract all anchor tags
+            const anchors = doc.querySelectorAll('a[href]');
+            
+            anchors.forEach(anchor => {
+                try {
+                    const href = anchor.getAttribute('href');
+                    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+                        return; // Skip fragments, email and phone links
+                    }
+                    
+                    // Resolve relative URLs
+                    const fullUrl = new URL(href, baseUrl);
+                    const isInternalLink = fullUrl.hostname === baseUrl.hostname;
+                    
+                    // Only include links based on the type requested
+                    if (isInternal === isInternalLink) {
+                        links.push({
+                            href: fullUrl.href,
+                            text: anchor.textContent?.trim() || '',
+                            anchor: anchor.textContent?.trim() || '[No anchor text]',
+                            title: anchor.getAttribute('title') || ''
+                        });
+                    }
+                } catch (e) {
+                    // Skip invalid URLs
+                }
+            });
+            
+            return links;
+        } catch (error) {
+            console.warn('Failed to parse HTML for link extraction:', error);
+            return [];
+        }
     }
 
     updateSEOStrategySection() {
@@ -2003,4 +2320,671 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     `;
     document.head.appendChild(style);
+});
+
+// Professional Chart Functionality
+class SEOChartManager {
+    constructor() {
+        this.charts = {};
+        this.initializeCharts();
+    }
+
+    initializeCharts() {
+        // Initialize all charts when data is available
+        if (typeof Chart !== 'undefined') {
+            Chart.defaults.responsive = true;
+            Chart.defaults.maintainAspectRatio = false;
+            Chart.defaults.plugins.legend.display = true;
+            Chart.defaults.plugins.tooltip.enabled = true;
+        }
+    }
+
+    createKeywordDensityChart(keywords) {
+        const canvas = document.getElementById('keywordDensityChart');
+        if (!canvas) {
+            console.warn('Keyword chart canvas not found');
+            return;
+        }
+
+        if (!keywords || keywords.length === 0) {
+            console.warn('No keywords data for chart');
+            this.createPlaceholderChart('keywordDensityChart', 'No keywords data available');
+            return;
+        }
+
+        // Destroy existing chart
+        if (this.charts.keywordDensity) {
+            this.charts.keywordDensity.destroy();
+        }
+
+        // Take top 10 keywords and ensure they have valid data
+        const topKeywords = keywords.slice(0, 10).filter(k => 
+            k && (k.word || k.keyword) && (k.count || k.frequency || k.repeats || 0) > 0
+        );
+
+        if (topKeywords.length === 0) {
+            this.createPlaceholderChart('keywordDensityChart', 'No valid keywords found');
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+
+        this.charts.keywordDensity = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: topKeywords.map(k => k.word || k.keyword || 'Unknown'),
+                datasets: [{
+                    label: 'Keyword Frequency',
+                    data: topKeywords.map(k => k.count || k.frequency || k.repeats || 0),
+                    backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `Top ${topKeywords.length} Keywords by Frequency`,
+                        font: { size: 14, weight: 'bold' }
+                    },
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Frequency'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Keywords'
+                        },
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 0
+                        }
+                    }
+                }
+            }
+        });
+
+        console.log('✅ Keyword density chart created successfully with', topKeywords.length, 'keywords');
+    }
+
+    createCategoryScoresChart(categoryScores) {
+        const canvas = document.getElementById('categoryScoresChart');
+        if (!canvas) {
+            console.warn('Category scores chart canvas not found');
+            return;
+        }
+
+        if (!categoryScores || Object.keys(categoryScores).length === 0) {
+            console.warn('No category scores data for chart');
+            this.createPlaceholderChart('categoryScoresChart', 'Category scores not available');
+            return;
+        }
+
+        if (this.charts.categoryScores) {
+            this.charts.categoryScores.destroy();
+        }
+
+        const categories = Object.keys(categoryScores);
+        const scores = categories.map(cat => {
+            const score = categoryScores[cat];
+            return typeof score === 'object' ? (score.score || 0) : (score || 0);
+        }).filter(score => !isNaN(score));
+
+        if (scores.length === 0) {
+            this.createPlaceholderChart('categoryScoresChart', 'No valid category scores found');
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+        this.charts.categoryScores = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: categories.map(cat => cat.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())),
+                datasets: [{
+                    label: 'SEO Category Scores',
+                    data: scores,
+                    borderColor: 'rgba(139, 92, 246, 1)',
+                    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                    pointBackgroundColor: 'rgba(139, 92, 246, 1)',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: 'rgba(139, 92, 246, 1)',
+                    borderWidth: 2,
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'SEO Category Performance',
+                        font: { size: 14, weight: 'bold' }
+                    }
+                },
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            stepSize: 20,
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        console.log('✅ Category scores chart created successfully with', categories.length, 'categories');
+    }
+
+    createIssuesPriorityChart(issues) {
+        const canvas = document.getElementById('issuesPriorityChart');
+        if (!canvas) {
+            console.warn('Issues priority chart canvas not found');
+            return;
+        }
+
+        if (!issues) {
+            console.warn('No issues data for chart');
+            this.createPlaceholderChart('issuesPriorityChart', 'Issues data not available');
+            return;
+        }
+
+        if (this.charts.issuesPriority) {
+            this.charts.issuesPriority.destroy();
+        }
+
+        // Count issues by priority - handle both array and summary object
+        const priorityCounts = {
+            critical: 0,
+            high: 0,
+            medium: 0,
+            low: 0
+        };
+
+        if (Array.isArray(issues)) {
+            // Handle array of issues
+            issues.forEach(issue => {
+                const priority = issue.priority?.toLowerCase() || 'medium';
+                if (priorityCounts.hasOwnProperty(priority)) {
+                    priorityCounts[priority]++;
+                }
+            });
+        } else if (typeof issues === 'object') {
+            // Handle issues summary object
+            priorityCounts.critical = issues.critical || 0;
+            priorityCounts.high = issues.high || 0;
+            priorityCounts.medium = issues.medium || 0;
+            priorityCounts.low = issues.low || 0;
+        }
+
+        const totalIssues = Object.values(priorityCounts).reduce((a, b) => a + b, 0);
+        if (totalIssues === 0) {
+            this.createPlaceholderChart('issuesPriorityChart', 'No issues found - Great job!');
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+        this.charts.issuesPriority = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Critical', 'High', 'Medium', 'Low'],
+                datasets: [{
+                    data: [
+                        priorityCounts.critical,
+                        priorityCounts.high,
+                        priorityCounts.medium,
+                        priorityCounts.low
+                    ],
+                    backgroundColor: [
+                        'rgba(239, 68, 68, 0.8)',   // Critical - Red
+                        'rgba(245, 158, 11, 0.8)',  // High - Orange
+                        'rgba(59, 130, 246, 0.8)',  // Medium - Blue
+                        'rgba(16, 185, 129, 0.8)'   // Low - Green
+                    ],
+                    borderColor: [
+                        'rgba(239, 68, 68, 1)',
+                        'rgba(245, 158, 11, 1)',
+                        'rgba(59, 130, 246, 1)',
+                        'rgba(16, 185, 129, 1)'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `Issues by Priority (${totalIssues} total)`,
+                        font: { size: 14, weight: 'bold' }
+                    },
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+
+        console.log('✅ Issues priority chart created successfully with', totalIssues, 'total issues');
+    }
+
+    createPlaceholderChart(canvasId, message) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+
+        // Destroy existing chart
+        if (this.charts[canvasId.replace('Chart', '')]) {
+            this.charts[canvasId.replace('Chart', '')].destroy();
+        }
+
+        const ctx = canvas.getContext('2d');
+        this.charts[canvasId.replace('Chart', '')] = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Placeholder'],
+                datasets: [{
+                    data: [1],
+                    backgroundColor: ['rgba(156, 163, 175, 0.3)'],
+                    borderColor: ['rgba(156, 163, 175, 0.6)'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: message,
+                        font: { size: 14, weight: 'bold' },
+                        color: 'rgba(107, 114, 128, 1)'
+                    },
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        enabled: false
+                    }
+                }
+            }
+        });
+
+        console.log('📊 Placeholder chart created for', canvasId, 'with message:', message);
+    }
+
+    updateChartsWithAnalysis(analysis) {
+        if (!analysis) {
+            console.warn('Chart Update: No analysis data provided');
+            return;
+        }
+
+        console.log('=== Chart Data Debug Info ===');
+        console.log('Full Analysis Object:', analysis);
+        console.log('Analysis.analysis:', analysis.analysis);
+        console.log('Analysis.keywords:', analysis.keywords);
+
+        // Extract keywords from multiple possible sources
+        const keywords = analysis.keywords || 
+                         analysis.analysis?.keywords || 
+                         analysis.pages?.[0]?.keywords || 
+                         analysis.analysis?.pages?.[0]?.keywords ||
+                         [];
+
+        console.log('Extracted Keywords:', keywords);
+
+        if (keywords.length > 0) {
+            console.log('✅ Creating keyword density chart with', keywords.length, 'keywords');
+            this.createKeywordDensityChart(keywords);
+        } else {
+            console.warn('⚠️ No keywords found for chart');
+            // Create a placeholder chart
+            this.createPlaceholderChart('keywordDensityChart', 'No keywords data available yet');
+        }
+
+        // Extract professional analysis from multiple possible sources
+        const professionalAnalysis = analysis.analysis?.pages?.[0]?.professional_analysis ||
+                                    analysis.pages?.[0]?.professional_analysis ||
+                                    analysis.professional_analysis;
+
+        console.log('Professional Analysis Found:', professionalAnalysis);
+
+        if (professionalAnalysis) {
+            // Category scores chart
+            if (professionalAnalysis.category_scores) {
+                console.log('✅ Creating category scores chart');
+                console.log('Category Scores Data:', professionalAnalysis.category_scores);
+                this.createCategoryScoresChart(professionalAnalysis.category_scores);
+            } else {
+                console.warn('⚠️ No category scores found');
+                this.createPlaceholderChart('categoryScoresChart', 'Professional analysis in progress...');
+            }
+
+            // Issues priority chart
+            if (professionalAnalysis.all_issues || professionalAnalysis.issues_summary) {
+                console.log('✅ Creating issues priority chart');
+                console.log('Issues Data:', professionalAnalysis.all_issues || professionalAnalysis.issues_summary);
+                this.createIssuesPriorityChart(professionalAnalysis.all_issues || professionalAnalysis.issues_summary);
+            } else {
+                console.warn('⚠️ No issues data found');
+                this.createPlaceholderChart('issuesPriorityChart', 'Issues analysis in progress...');
+            }
+        } else {
+            console.warn('⚠️ No professional analysis data found');
+            this.createPlaceholderChart('categoryScoresChart', 'Professional analysis not available');
+            this.createPlaceholderChart('issuesPriorityChart', 'Issues analysis not available');
+        }
+
+        console.log('=== End Chart Data Debug ===');
+    }
+
+    destroyAllCharts() {
+        Object.values(this.charts).forEach(chart => {
+            if (chart && typeof chart.destroy === 'function') {
+                chart.destroy();
+            }
+        });
+        this.charts = {};
+    }
+}
+
+// Analysis Timing Manager to investigate timing inconsistencies
+class AnalysisTimingManager {
+    constructor() {
+        this.analysisStartTime = null;
+        this.analysisEndTime = null;
+        this.phaseTimings = {};
+        this.qualityMetrics = {};
+        this.timingThresholds = {
+            minimum_expected_time: 3000,  // 3 seconds minimum for thorough analysis
+            maximum_reasonable_time: 60000, // 60 seconds maximum
+            warning_quick_completion: 5000   // Warn if analysis completes under 5 seconds
+        };
+        this.init();
+    }
+
+    init() {
+        console.log('🕐 AnalysisTimingManager initialized');
+        this.bindAnalysisEvents();
+    }
+
+    bindAnalysisEvents() {
+        // Hook into the existing analyzeWebsite method
+        const originalAnalyze = window.seoAgent?.analyzeWebsite;
+        if (originalAnalyze && window.seoAgent) {
+            window.seoAgent.analyzeWebsite = async function() {
+                const urlInput = document.getElementById('urlInput');
+                const url = urlInput?.value?.trim() || 'unknown';
+                window.analysisTimingManager.startAnalysis(url);
+                try {
+                    const result = await originalAnalyze.call(this);
+                    window.analysisTimingManager.endAnalysis(this.currentAnalysis);
+                    return result;
+                } catch (error) {
+                    window.analysisTimingManager.handleAnalysisError(error);
+                    throw error;
+                }
+            };
+        }
+    }
+
+    getUrlFromInput() {
+        return document.getElementById('urlInput')?.value?.trim() || 'unknown';
+    }
+
+    startAnalysis(url) {
+        this.analysisStartTime = Date.now();
+        this.currentUrl = url;
+        this.phaseTimings = {};
+        this.qualityMetrics = {};
+        
+        console.log(`🚀 Analysis started for: ${url} at ${new Date().toISOString()}`);
+        
+        // Track phase start
+        this.markPhaseStart('total_analysis');
+        this.markPhaseStart('initial_request');
+    }
+
+    markPhaseStart(phaseName) {
+        this.phaseTimings[phaseName] = { start: Date.now() };
+        console.log(`📋 Phase started: ${phaseName}`);
+    }
+
+    markPhaseEnd(phaseName) {
+        if (this.phaseTimings[phaseName]) {
+            this.phaseTimings[phaseName].end = Date.now();
+            this.phaseTimings[phaseName].duration = this.phaseTimings[phaseName].end - this.phaseTimings[phaseName].start;
+            console.log(`✅ Phase completed: ${phaseName} (${this.phaseTimings[phaseName].duration}ms)`);
+        }
+    }
+
+    endAnalysis(analysisResult) {
+        this.analysisEndTime = Date.now();
+        this.markPhaseEnd('total_analysis');
+        
+        const totalDuration = this.analysisEndTime - this.analysisStartTime;
+        console.log(`🏁 Analysis completed for: ${this.currentUrl} in ${totalDuration}ms`);
+        
+        // Analyze quality and timing
+        this.analyzeQuality(analysisResult, totalDuration);
+        this.provideTimingFeedback(totalDuration);
+        this.logDetailedReport();
+    }
+
+    analyzeQuality(analysisResult, duration) {
+        this.qualityMetrics = {
+            url: this.currentUrl,
+            duration: duration,
+            has_professional_analysis: !!(analysisResult?.analysis?.pages?.[0]?.professional_analysis),
+            has_llm_analysis: !!(analysisResult?.analysis?.llm_analysis),
+            has_keywords: !!(analysisResult?.keywords && analysisResult.keywords.length > 0),
+            has_links: !!(analysisResult?.pages?.[0]?.links && analysisResult.pages[0].links.length > 0),
+            pages_analyzed: analysisResult?.pages?.length || 0,
+            seo_score_source: this.determineSEOScoreSource(analysisResult),
+            completion_type: this.determineCompletionType(duration, analysisResult)
+        };
+
+        // Quality scoring
+        let qualityScore = 0;
+        if (this.qualityMetrics.has_professional_analysis) qualityScore += 30;
+        if (this.qualityMetrics.has_llm_analysis) qualityScore += 25;
+        if (this.qualityMetrics.has_keywords) qualityScore += 20;
+        if (this.qualityMetrics.has_links) qualityScore += 15;
+        if (this.qualityMetrics.pages_analyzed > 0) qualityScore += 10;
+
+        this.qualityMetrics.quality_score = qualityScore;
+        this.qualityMetrics.quality_grade = this.getQualityGrade(qualityScore);
+
+        console.log('📊 Quality Analysis:', this.qualityMetrics);
+    }
+
+    determineSEOScoreSource(analysisResult) {
+        if (analysisResult?.analysis?.pages?.[0]?.professional_analysis?.overall_score) {
+            return 'professional_analysis';
+        } else if (analysisResult?.seo_score) {
+            return 'backend_calculation';
+        } else {
+            return 'frontend_fallback';
+        }
+    }
+
+    determineCompletionType(duration, analysisResult) {
+        if (duration < this.timingThresholds.warning_quick_completion) {
+            if (this.qualityMetrics.has_professional_analysis && this.qualityMetrics.has_llm_analysis) {
+                return 'fast_but_complete';
+            } else {
+                return 'suspiciously_fast';
+            }
+        } else if (duration > this.timingThresholds.maximum_reasonable_time) {
+            return 'unusually_slow';
+        } else {
+            return 'normal';
+        }
+    }
+
+    getQualityGrade(score) {
+        if (score >= 90) return 'A+ (Excellent)';
+        if (score >= 80) return 'A (Very Good)';
+        if (score >= 70) return 'B (Good)';
+        if (score >= 60) return 'C (Fair)';
+        if (score >= 50) return 'D (Poor)';
+        return 'F (Incomplete)';
+    }
+
+    provideTimingFeedback(duration) {
+        let message = '';
+        let type = 'info';
+
+        switch (this.qualityMetrics.completion_type) {
+            case 'suspiciously_fast':
+                message = `⚠️ Analysis completed unusually quickly (${duration}ms). This may indicate:\n• Cached results being returned\n• Limited analysis depth\n• Network/server issues\n• Missing professional analysis components`;
+                type = 'warning';
+                break;
+            case 'fast_but_complete':
+                message = `✅ Excellent! Analysis completed quickly (${duration}ms) with comprehensive results including professional analysis and LLM insights.`;
+                type = 'success';
+                break;
+            case 'unusually_slow':
+                message = `🐌 Analysis took longer than expected (${duration}ms). This could be due to:\n• Complex website structure\n• LLM analysis processing time\n• Network latency\n• Server load`;
+                type = 'warning';
+                break;
+            case 'normal':
+                message = `✅ Analysis completed in normal timeframe (${duration}ms) with quality score: ${this.qualityMetrics.quality_grade}`;
+                type = 'success';
+                break;
+        }
+
+        if (window.seoAgent && message) {
+            setTimeout(() => {
+                window.seoAgent.showAlert(message, type);
+            }, 1000);
+        }
+    }
+
+    handleAnalysisError(error) {
+        this.analysisEndTime = Date.now();
+        const duration = this.analysisEndTime - this.analysisStartTime;
+        
+        console.error('❌ Analysis failed:', error);
+        console.log(`💥 Analysis failed for: ${this.currentUrl} after ${duration}ms`);
+        
+        if (window.seoAgent) {
+            window.seoAgent.showAlert(`Analysis failed after ${duration}ms. Error: ${error.message}`, 'error');
+        }
+    }
+
+    logDetailedReport() {
+        console.log('=== DETAILED TIMING ANALYSIS REPORT ===');
+        console.log('URL:', this.currentUrl);
+        console.log('Total Duration:', this.phaseTimings.total_analysis?.duration, 'ms');
+        console.log('Quality Metrics:', this.qualityMetrics);
+        console.log('Phase Timings:', this.phaseTimings);
+        console.log('Completion Type:', this.qualityMetrics.completion_type);
+        console.log('Quality Grade:', this.qualityMetrics.quality_grade);
+        
+        // Specific recommendations based on analysis
+        if (this.qualityMetrics.completion_type === 'suspiciously_fast') {
+            console.log('🔍 INVESTIGATION NEEDED:');
+            console.log('• Check if professional analysis is enabled');
+            console.log('• Verify LLM analysis is running');
+            console.log('• Look for caching issues');
+            console.log('• Compare with known good analyses');
+        }
+        
+        console.log('=== END TIMING REPORT ===');
+    }
+
+    // Public method to compare two analyses
+    compareAnalyses(analysis1, analysis2) {
+        console.log('🔬 Comparing analyses:');
+        console.log('Analysis 1:', analysis1);
+        console.log('Analysis 2:', analysis2);
+        
+        const comparison = {
+            duration_diff: Math.abs(analysis1.duration - analysis2.duration),
+            quality_diff: Math.abs(analysis1.quality_score - analysis2.quality_score),
+            features_comparison: {
+                professional_analysis: [analysis1.has_professional_analysis, analysis2.has_professional_analysis],
+                llm_analysis: [analysis1.has_llm_analysis, analysis2.has_llm_analysis],
+                keywords: [analysis1.has_keywords, analysis2.has_keywords],
+                links: [analysis1.has_links, analysis2.has_links]
+            }
+        };
+        
+        console.log('Comparison Results:', comparison);
+        return comparison;
+    }
+}
+
+// Initialize chart manager and integrate with SEO Agent
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize timing manager
+    window.analysisTimingManager = new AnalysisTimingManager();
+    
+    // Add chart containers to professional diagnostics section if they don't exist
+    const professionalSection = document.getElementById('professional-diagnostics');
+    const categoryScores = document.getElementById('categoryScores');
+    
+    if (professionalSection && categoryScores && !document.getElementById('categoryScoresChart')) {
+        // Create chart containers
+        const chartSection = document.createElement('div');
+        chartSection.className = 'grid grid-cols-1 md:grid-cols-2 gap-6 mb-6';
+        chartSection.innerHTML = `
+            <!-- Category Scores Chart -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h4 class="text-lg font-semibold text-gray-800 mb-4">📊 Category Performance</h4>
+                <div class="chart-container" style="height: 250px;">
+                    <canvas id="categoryScoresChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Issues Priority Chart -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h4 class="text-lg font-semibold text-gray-800 mb-4">🎯 Issues Breakdown</h4>
+                <div class="chart-container" style="height: 250px;">
+                    <canvas id="issuesPriorityChart"></canvas>
+                </div>
+            </div>
+        `;
+        
+        // Insert chart section after category scores
+        categoryScores.parentNode.insertBefore(chartSection, categoryScores.nextSibling);
+    }
+    
+    // Wait for Chart.js to load
+    if (typeof Chart !== 'undefined') {
+        window.seoChartManager = new SEOChartManager();
+        
+        // Hook into existing SEO agent to update charts when analysis completes
+        const originalUpdateDisplay = window.seoAgent?.updateSEOScoreDisplay;
+        if (originalUpdateDisplay && window.seoAgent) {
+            window.seoAgent.updateSEOScoreDisplay = function(data) {
+                // Call original function
+                originalUpdateDisplay.call(this, data);
+                
+                // Update charts with new data
+                if (window.seoChartManager && this.currentAnalysis) {
+                    setTimeout(() => {
+                        window.seoChartManager.updateChartsWithAnalysis(this.currentAnalysis);
+                    }, 500); // Small delay to ensure DOM is updated
+                }
+            };
+        }
+    }
 });

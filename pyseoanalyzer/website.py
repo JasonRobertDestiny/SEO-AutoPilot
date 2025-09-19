@@ -16,6 +16,7 @@ class Website:
         analyze_extra_tags=False,
         follow_links=False,
         run_llm_analysis=False,
+        run_professional_analysis=True,
     ):
         self.base_url = base_url
         self.sitemap = sitemap
@@ -23,6 +24,7 @@ class Website:
         self.analyze_extra_tags = analyze_extra_tags
         self.follow_links = follow_links
         self.run_llm_analysis = run_llm_analysis
+        self.run_professional_analysis = run_professional_analysis
         self.crawled_pages = []
         self.crawled_urls = set()
         self.page_queue = []
@@ -73,6 +75,7 @@ class Website:
                     analyze_headings=self.analyze_headings,
                     analyze_extra_tags=self.analyze_extra_tags,
                     run_llm_analysis=self.run_llm_analysis,
+                    run_professional_analysis=self.run_professional_analysis,
                 )
 
                 if page.parsed_url.netloc != page.base_domain.netloc:

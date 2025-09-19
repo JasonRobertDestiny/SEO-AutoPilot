@@ -57,6 +57,18 @@ def main():
         action="store_true",
         help="Run LLM analysis on the content.",
     )
+    arg_parser.add_argument(
+        "--run-professional-analysis",
+        default=True,
+        action="store_true",
+        help="Run professional SEO diagnostics (enabled by default).",
+    )
+    arg_parser.add_argument(
+        "--no-professional-analysis",
+        dest="run_professional_analysis",
+        action="store_false",
+        help="Disable professional SEO diagnostics.",
+    )
 
     args = arg_parser.parse_args()
 
@@ -67,6 +79,7 @@ def main():
         analyze_extra_tags=args.analyze_extra_tags,
         follow_links=args.no_follow_links,
         run_llm_analysis=args.run_llm_analysis,
+        run_professional_analysis=args.run_professional_analysis,
     )
 
     if args.output_format == "html":
