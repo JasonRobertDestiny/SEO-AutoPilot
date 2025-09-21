@@ -2174,6 +2174,56 @@ class SEOAgent {
         }
     }
 
+    linkToAnalysisSection(category) {
+        // Map strategy categories to analysis sections
+        const categoryMappings = {
+            'Content Review': 'basic-seo',
+            'Content Strategy': 'basic-seo', 
+            'Content Quality': 'basic-seo',
+            'Competitive Analysis': 'ai-analysis',
+            'Link Building': 'basic-seo',
+            'Technical SEO': 'professional-diagnostics',
+            'Performance': 'professional-diagnostics',
+            'Mobile SEO': 'professional-diagnostics',
+            'Security': 'professional-diagnostics',
+            'Structured Data': 'professional-diagnostics',
+            'Trends Analysis': 'ai-analysis',
+            'Keyword Optimization': 'basic-seo',
+            'User Experience': 'professional-diagnostics',
+            'Analytics': 'ai-analysis'
+        };
+
+        // Get the target section ID
+        const targetSection = categoryMappings[category] || 'basic-seo';
+        
+        // Show the target section
+        this.showSection(targetSection);
+        
+        // Scroll to the section with smooth animation
+        const element = document.getElementById(targetSection);
+        if (element) {
+            element.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start' 
+            });
+            
+            // Add a highlight effect
+            element.style.border = '2px solid #8B5CF6';
+            element.style.boxShadow = '0 0 20px rgba(139, 92, 246, 0.3)';
+            element.style.transition = 'all 0.3s ease';
+            
+            // Remove highlight after 3 seconds
+            setTimeout(() => {
+                element.style.border = '';
+                element.style.boxShadow = '';
+                element.style.transition = '';
+            }, 3000);
+        }
+        
+        // Show success message
+        this.showAlert(`Viewing details for ${category} in ${targetSection.replace('-', ' ')} section`, 'info');
+    }
+
     async syncTodosWithBackend() {
         // 🔄 Sync local todos with backend API
         try {
