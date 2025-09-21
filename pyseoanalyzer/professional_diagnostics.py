@@ -24,6 +24,8 @@ from bs4 import BeautifulSoup
 import lxml.html as lh
 
 from .http_client import http
+from .serpapi_trends import SerpAPITrends
+from .keyword_diagnostics import KeywordComAPI
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -526,6 +528,7 @@ class DiagnosticCategory(Enum):
     MOBILE_SEO = "mobile_seo"
     SECURITY = "security"
     STRUCTURED_DATA = "structured_data"
+    TRENDS_ANALYSIS = "trends_analysis"
 
 
 @dataclass
@@ -561,18 +564,36 @@ class ProfessionalSEODiagnostics:
     
     def __init__(self):
         self.category_weights = {
-            DiagnosticCategory.TECHNICAL_SEO: 25.0,
-            DiagnosticCategory.PERFORMANCE: 20.0,
-            DiagnosticCategory.CONTENT_QUALITY: 20.0,
+            DiagnosticCategory.TECHNICAL_SEO: 20.0,
+            DiagnosticCategory.PERFORMANCE: 18.0,
+            DiagnosticCategory.CONTENT_QUALITY: 18.0,
             DiagnosticCategory.MOBILE_SEO: 15.0,
             DiagnosticCategory.SECURITY: 10.0,
-            DiagnosticCategory.STRUCTURED_DATA: 10.0
+            DiagnosticCategory.STRUCTURED_DATA: 9.0,
+            DiagnosticCategory.TRENDS_ANALYSIS: 10.0
         }
         
         self.issues = []
         self.category_scores = {}
         self.overall_score = 0.0
         self.google_pagespeed_api_key = None  # Set via environment if available
+        
+        # Initialize trends analysis components
+        self.trends_analyzer = None
+        self.keyword_api = None
+        try:
+            # Initialize SerpAPI Trends (optional)
+            self.trends_analyzer = SerpAPITrends()
+            print("🔥 SerpAPI Trends analyzer initialized")
+        except Exception as e:
+            print(f"⚠️ SerpAPI Trends not available: {str(e)}")
+        
+        try:
+            # Initialize Keyword.com API (optional)
+            self.keyword_api = KeywordComAPI()
+            print("📈 Keyword.com API initialized")
+        except Exception as e:
+            print(f"⚠️ Keyword.com API not available: {str(e)}")
         
     def comprehensive_audit(self, url: str, html_content: str = None, page_data: Dict = None) -> Dict[str, Any]:
         """
@@ -608,7 +629,8 @@ class ProfessionalSEODiagnostics:
             'content_quality': self._analyze_content_quality(soup, page_data),
             'mobile_seo': self._analyze_mobile_seo(url, soup),
             'security': self._analyze_security(url, soup),
-            'structured_data': self._analyze_structured_data(soup)
+            'structured_data': self._analyze_structured_data(soup),
+            'trends_analysis': self._analyze_trends_and_opportunities(url, page_data)
         }
         
         # Calculate professional scores
@@ -636,6 +658,19 @@ class ProfessionalSEODiagnostics:
             'optimization_roadmap': roadmap,
             'all_issues': [self._issue_to_dict(issue) for issue in self.issues]
         }
+
+    def analyze_comprehensive(self, page_data: Dict) -> Dict[str, Any]:
+        """
+        Alias for comprehensive_audit for backward compatibility with tests
+        
+        Args:
+            page_data: Page analysis data containing URL and content information
+            
+        Returns:
+            Comprehensive diagnostic results
+        """
+        url = page_data.get('url', '')
+        return self.comprehensive_audit(url, page_data=page_data)
     
     def _analyze_technical_seo(self, url: str, soup: BeautifulSoup, page_data: Dict = None) -> Dict[str, Any]:
         """
@@ -2665,3 +2700,479 @@ class ProfessionalSEODiagnostics:
     def _check_rich_results(self, soup: BeautifulSoup) -> Dict[str, Any]:
         """Placeholder for rich results analysis"""
         return {'score': 45, 'notes': 'Rich results analysis placeholder'}
+    
+    def _analyze_trends_and_opportunities(self, url: str, page_data: Dict = None) -> Dict[str, Any]:
+        """
+        🔥 Comprehensive trends analysis and content opportunity evaluation
+        
+        This analysis combines:
+        - SerpAPI Google Trends data for keyword trend analysis
+        - Keyword.com professional ranking diagnostics
+        - Content opportunity identification
+        - Seasonal pattern analysis
+        - Search intent optimization recommendations
+        """
+        results = {
+            'keyword_trends': self._check_keyword_trends(page_data),
+            'content_opportunities': self._check_content_opportunities(url, page_data),
+            'seasonal_insights': self._check_seasonal_patterns(page_data),
+            'competitive_analysis': self._check_competitive_trends(url),
+            'search_intent_optimization': self._check_search_intent_alignment(page_data),
+            'trending_topics': self._check_trending_topics_relevance(page_data)
+        }
+        
+        return results
+    
+    def _check_keyword_trends(self, page_data: Dict = None) -> Dict[str, Any]:
+        """Analyze keyword trends using SerpAPI Google Trends"""
+        results = {'score': 100, 'issues': [], 'details': {}}
+        
+        try:
+            if not self.trends_analyzer:
+                results['score'] = 50
+                results['details']['error'] = 'SerpAPI Trends not available'
+                return results
+            
+            if not page_data or not page_data.get('wordlist'):
+                results['score'] = 60
+                results['details']['error'] = 'No keyword data available for trends analysis'
+                return results
+            
+            # Extract top keywords from page analysis
+            top_keywords = [word[0] for word in page_data['wordlist'][:10]]  # Top 10 keywords
+            results['details']['analyzed_keywords'] = top_keywords
+            
+            # Get trends data
+            trends_data = self.trends_analyzer.get_keyword_trends(top_keywords)
+            
+            # Analyze trend patterns
+            rising_trends = 0
+            falling_trends = 0
+            stable_trends = 0
+            high_opportunity_keywords = []
+            
+            for keyword, trend_info in trends_data.items():
+                if trend_info.trend_direction == 'rising':
+                    rising_trends += 1
+                    if trend_info.average_interest > 50:
+                        high_opportunity_keywords.append(keyword)
+                elif trend_info.trend_direction == 'falling':
+                    falling_trends += 1
+                else:
+                    stable_trends += 1
+            
+            results['details']['trends_summary'] = {
+                'rising_trends': rising_trends,
+                'falling_trends': falling_trends,
+                'stable_trends': stable_trends,
+                'high_opportunity_keywords': high_opportunity_keywords
+            }
+            
+            # Generate trend-based issues and recommendations
+            if falling_trends > rising_trends and falling_trends > 3:
+                self._add_issue(
+                    DiagnosticCategory.TRENDS_ANALYSIS,
+                    "Declining keyword trends",
+                    f"{falling_trends} primary keywords show declining search interest",
+                    PriorityLevel.HIGH,
+                    75.0, 40.0,
+                    "Diversify content strategy to include rising trend keywords and emerging topics"
+                )
+                results['score'] -= 30
+            
+            if not high_opportunity_keywords:
+                self._add_issue(
+                    DiagnosticCategory.TRENDS_ANALYSIS,
+                    "Low trending keyword opportunity",
+                    "No keywords showing high search interest trends",
+                    PriorityLevel.MEDIUM,
+                    50.0, 30.0,
+                    "Research and target keywords with growing search interest"
+                )
+                results['score'] -= 20
+            
+            # Bonus for rising trends
+            if rising_trends > 3:
+                results['score'] = min(100, results['score'] + 10)
+                results['details']['rising_trend_bonus'] = True
+            
+            results['details']['analysis'] = f'Analyzed {len(trends_data)} keywords for trend patterns'
+            
+        except Exception as e:
+            logger.error(f"Keyword trends analysis failed: {str(e)}")
+            results['score'] = 40
+            results['details']['error'] = str(e)
+        
+        return results
+    
+    def _check_content_opportunities(self, url: str, page_data: Dict = None) -> Dict[str, Any]:
+        """Identify content opportunities using trends and competitive analysis"""
+        results = {'score': 100, 'issues': [], 'details': {}}
+        
+        try:
+            if not self.trends_analyzer or not page_data:
+                results['score'] = 50
+                results['details']['error'] = 'Insufficient data for content opportunity analysis'
+                return results
+            
+            top_keywords = [word[0] for word in page_data.get('wordlist', [])[:5]]
+            
+            # Get content opportunities from trends analyzer
+            opportunities = self.trends_analyzer.analyze_content_opportunities(top_keywords)
+            
+            content_suggestions = opportunities.get('content_suggestions', [])
+            optimization_priorities = opportunities.get('optimization_priorities', [])
+            
+            results['details']['content_suggestions_count'] = len(content_suggestions)
+            results['details']['optimization_priorities_count'] = len(optimization_priorities)
+            
+            # Evaluate content gap based on opportunities
+            if len(content_suggestions) == 0:
+                self._add_issue(
+                    DiagnosticCategory.TRENDS_ANALYSIS,
+                    "Limited content expansion opportunities",
+                    "No trending content opportunities identified for current keywords",
+                    PriorityLevel.MEDIUM,
+                    45.0, 25.0,
+                    "Research broader keyword variants and related trending topics"
+                )
+                results['score'] -= 15
+            
+            # Check for high-priority optimization opportunities
+            high_priority_opportunities = [op for op in optimization_priorities if op.get('priority_score', 0) > 0.7]
+            
+            if len(high_priority_opportunities) > 0:
+                self._add_issue(
+                    DiagnosticCategory.TRENDS_ANALYSIS,
+                    "High-impact content optimization opportunities",
+                    f"Found {len(high_priority_opportunities)} high-priority content optimization opportunities",
+                    PriorityLevel.HIGH,
+                    80.0, 35.0,
+                    "Prioritize content creation/optimization for high-impact trending keywords"
+                )
+                # This is actually a positive finding, so add bonus points
+                results['score'] = min(100, results['score'] + 15)
+            
+            results['details']['opportunities_data'] = opportunities
+            results['details']['analysis'] = f'Identified {len(content_suggestions)} content opportunities'
+            
+        except Exception as e:
+            logger.error(f"Content opportunities analysis failed: {str(e)}")
+            results['score'] = 40
+            results['details']['error'] = str(e)
+        
+        return results
+    
+    def _check_seasonal_patterns(self, page_data: Dict = None) -> Dict[str, Any]:
+        """Analyze seasonal search patterns for content planning"""
+        results = {'score': 100, 'issues': [], 'details': {}}
+        
+        try:
+            if not self.trends_analyzer or not page_data:
+                results['score'] = 60
+                results['details']['note'] = 'Seasonal analysis requires trends data and page keywords'
+                return results
+            
+            top_keywords = [word[0] for word in page_data.get('wordlist', [])[:5]]
+            trends_data = self.trends_analyzer.get_keyword_trends(top_keywords, timeframe="today 12-m")
+            
+            seasonal_keywords = []
+            evergreen_keywords = []
+            
+            for keyword, trend_info in trends_data.items():
+                peak_periods = len(trend_info.peak_periods)
+                if peak_periods >= 2:
+                    seasonal_keywords.append({
+                        'keyword': keyword,
+                        'peak_periods': peak_periods,
+                        'seasonality_strength': 'high' if peak_periods >= 4 else 'moderate'
+                    })
+                else:
+                    evergreen_keywords.append(keyword)
+            
+            results['details']['seasonal_keywords'] = seasonal_keywords
+            results['details']['evergreen_keywords'] = evergreen_keywords
+            
+            # Generate recommendations based on seasonality
+            if len(seasonal_keywords) > 0 and len(evergreen_keywords) == 0:
+                self._add_issue(
+                    DiagnosticCategory.TRENDS_ANALYSIS,
+                    "High seasonal dependency",
+                    f"All primary keywords show seasonal patterns, lacking evergreen content foundation",
+                    PriorityLevel.MEDIUM,
+                    55.0, 30.0,
+                    "Balance content strategy with evergreen topics to maintain consistent traffic"
+                )
+                results['score'] -= 20
+            
+            elif len(seasonal_keywords) == 0:
+                self._add_issue(
+                    DiagnosticCategory.TRENDS_ANALYSIS,
+                    "Missing seasonal opportunities",
+                    "No keywords showing seasonal search patterns - missing potential traffic spikes",
+                    PriorityLevel.LOW,
+                    30.0, 20.0,
+                    "Research seasonal keywords in your niche to capture periodic high-demand periods"
+                )
+                results['score'] -= 10
+            
+            # Bonus for balanced strategy
+            if len(seasonal_keywords) > 0 and len(evergreen_keywords) > 0:
+                results['score'] = min(100, results['score'] + 10)
+                results['details']['balanced_strategy'] = True
+            
+            results['details']['analysis'] = f'Analyzed {len(trends_data)} keywords for seasonal patterns'
+            
+        except Exception as e:
+            logger.error(f"Seasonal patterns analysis failed: {str(e)}")
+            results['score'] = 50
+            results['details']['error'] = str(e)
+        
+        return results
+    
+    def _check_competitive_trends(self, url: str) -> Dict[str, Any]:
+        """Analyze competitive landscape using Keyword.com API"""
+        results = {'score': 100, 'issues': [], 'details': {}}
+        
+        try:
+            if not self.keyword_api:
+                results['score'] = 50
+                results['details']['note'] = 'Keyword.com API not available for competitive analysis'
+                return results
+            
+            # Extract domain from URL
+            from urllib.parse import urlparse
+            parsed_url = urlparse(url)
+            domain = parsed_url.netloc.replace('www.', '')
+            
+            # Analyze domain keywords using Keyword.com API
+            domain_analysis = self.keyword_api.analyze_domain_keywords(domain, max_keywords=20)
+            
+            if 'error' in domain_analysis:
+                results['score'] = 60
+                results['details']['error'] = domain_analysis['error']
+                return results
+            
+            # Extract competitive insights
+            total_keywords = domain_analysis.get('total_keywords', 0)
+            projects_analyzed = domain_analysis.get('projects_analyzed', 0)
+            analysis_data = domain_analysis.get('analysis', {})
+            
+            results['details']['domain_keywords_tracked'] = total_keywords
+            results['details']['projects_analyzed'] = projects_analyzed
+            
+            # Evaluate competitive position
+            if total_keywords == 0:
+                self._add_issue(
+                    DiagnosticCategory.TRENDS_ANALYSIS,
+                    "No tracked keyword rankings",
+                    "Domain not found in professional ranking systems",
+                    PriorityLevel.HIGH,
+                    70.0, 45.0,
+                    "Establish keyword tracking and ranking monitoring for competitive analysis"
+                )
+                results['score'] = 30
+            elif total_keywords < 50:
+                self._add_issue(
+                    DiagnosticCategory.TRENDS_ANALYSIS,
+                    "Limited competitive keyword coverage",
+                    f"Only {total_keywords} keywords tracked - insufficient for comprehensive competitive analysis",
+                    PriorityLevel.MEDIUM,
+                    50.0, 35.0,
+                    "Expand keyword tracking to cover more competitive terms and long-tail variations"
+                )
+                results['score'] -= 20
+            
+            # Analyze competitive health
+            tracking_health = analysis_data.get('tracking_health', {})
+            if tracking_health.get('status') == 'needs_attention':
+                health_issues = tracking_health.get('issues', [])
+                for issue in health_issues:
+                    self._add_issue(
+                        DiagnosticCategory.TRENDS_ANALYSIS,
+                        "Competitive tracking issues",
+                        issue,
+                        PriorityLevel.MEDIUM,
+                        40.0, 25.0,
+                        "Address keyword tracking and competitive monitoring issues"
+                    )
+                results['score'] -= 15
+            
+            results['details']['competitive_analysis'] = domain_analysis
+            results['details']['analysis'] = f'Analyzed competitive position with {total_keywords} tracked keywords'
+            
+        except Exception as e:
+            logger.error(f"Competitive trends analysis failed: {str(e)}")
+            results['score'] = 40
+            results['details']['error'] = str(e)
+        
+        return results
+    
+    def _check_search_intent_alignment(self, page_data: Dict = None) -> Dict[str, Any]:
+        """Analyze search intent alignment and optimization opportunities"""
+        results = {'score': 100, 'issues': [], 'details': {}}
+        
+        try:
+            if not page_data:
+                results['score'] = 50
+                results['details']['error'] = 'No page data available for search intent analysis'
+                return results
+            
+            # Analyze content characteristics
+            word_count = page_data.get('wordcount', 0)
+            headings = page_data.get('headings', {})
+            images = page_data.get('images', [])
+            title = page_data.get('title', '')
+            
+            # Basic intent classification based on content patterns
+            commercial_signals = ['buy', 'price', 'cost', 'purchase', 'order', 'shop', 'deal']
+            informational_signals = ['how', 'what', 'why', 'guide', 'tips', 'learn', 'tutorial']
+            navigational_signals = ['contact', 'about', 'login', 'sign up', 'home', 'location']
+            transactional_signals = ['download', 'free', 'trial', 'demo', 'signup', 'register']
+            
+            content_text = page_data.get('text_content', '').lower()
+            title_lower = title.lower()
+            
+            # Count intent signals
+            commercial_count = sum(1 for signal in commercial_signals if signal in content_text or signal in title_lower)
+            informational_count = sum(1 for signal in informational_signals if signal in content_text or signal in title_lower)
+            navigational_count = sum(1 for signal in navigational_signals if signal in content_text or signal in title_lower)
+            transactional_count = sum(1 for signal in transactional_signals if signal in content_text or signal in title_lower)
+            
+            # Determine primary intent
+            intent_scores = {
+                'commercial': commercial_count,
+                'informational': informational_count,
+                'navigational': navigational_count,
+                'transactional': transactional_count
+            }
+            
+            primary_intent = max(intent_scores.keys(), key=lambda k: intent_scores[k])
+            intent_strength = intent_scores[primary_intent]
+            
+            results['details']['intent_analysis'] = {
+                'primary_intent': primary_intent,
+                'intent_strength': intent_strength,
+                'intent_scores': intent_scores
+            }
+            
+            # Check for intent optimization issues
+            if intent_strength == 0:
+                self._add_issue(
+                    DiagnosticCategory.TRENDS_ANALYSIS,
+                    "Unclear search intent signals",
+                    "Content lacks clear search intent signals for user queries",
+                    PriorityLevel.MEDIUM,
+                    45.0, 25.0,
+                    "Add clear intent signals (commercial, informational, navigational, or transactional) to align with user search goals"
+                )
+                results['score'] -= 20
+            
+            # Check content-intent alignment
+            if primary_intent == 'informational':
+                if word_count < 300:
+                    self._add_issue(
+                        DiagnosticCategory.TRENDS_ANALYSIS,
+                        "Insufficient informational content depth",
+                        f"Informational intent detected but content only {word_count} words",
+                        PriorityLevel.MEDIUM,
+                        50.0, 30.0,
+                        "Expand informational content to thoroughly answer user questions"
+                    )
+                    results['score'] -= 15
+                
+                if sum(len(h) for h in headings.values()) < 2:
+                    self._add_issue(
+                        DiagnosticCategory.TRENDS_ANALYSIS,
+                        "Poor informational content structure",
+                        "Informational content needs better heading structure for scannability",
+                        PriorityLevel.LOW,
+                        30.0, 15.0,
+                        "Add descriptive headings to structure informational content"
+                    )
+                    results['score'] -= 10
+            
+            elif primary_intent == 'commercial':
+                if not any(signal in content_text for signal in ['review', 'comparison', 'vs', 'best']):
+                    self._add_issue(
+                        DiagnosticCategory.TRENDS_ANALYSIS,
+                        "Missing commercial content elements",
+                        "Commercial intent detected but lacks comparison/review elements",
+                        PriorityLevel.MEDIUM,
+                        45.0, 25.0,
+                        "Add product comparisons, reviews, or buying guides to support commercial intent"
+                    )
+                    results['score'] -= 15
+            
+            results['details']['analysis'] = f'Search intent analysis: {primary_intent} intent with strength {intent_strength}'
+            
+        except Exception as e:
+            logger.error(f"Search intent analysis failed: {str(e)}")
+            results['score'] = 50
+            results['details']['error'] = str(e)
+        
+        return results
+    
+    def _check_trending_topics_relevance(self, page_data: Dict = None) -> Dict[str, Any]:
+        """Check relevance to current trending topics"""
+        results = {'score': 100, 'issues': [], 'details': {}}
+        
+        try:
+            if not self.trends_analyzer:
+                results['score'] = 50
+                results['details']['note'] = 'Trending topics analysis requires SerpAPI Trends'
+                return results
+            
+            # Get current trending keywords
+            trending_keywords = self.trends_analyzer.get_trending_keywords()
+            
+            if not trending_keywords:
+                results['score'] = 60
+                results['details']['note'] = 'No trending keywords data available'
+                return results
+            
+            results['details']['trending_keywords_count'] = len(trending_keywords)
+            
+            # Calculate relevance to page content
+            if page_data and page_data.get('wordlist'):
+                page_keywords = [word[0].lower() for word in page_data['wordlist'][:20]]
+                trending_titles = [trend.get('title', '').lower() for trend in trending_keywords[:10]]
+                
+                # Check for keyword overlap with trending topics
+                relevance_matches = []
+                for trend_title in trending_titles:
+                    for page_keyword in page_keywords:
+                        if page_keyword in trend_title or any(word in page_keyword for word in trend_title.split() if len(word) > 3):
+                            relevance_matches.append({
+                                'page_keyword': page_keyword,
+                                'trending_topic': trend_title
+                            })
+                
+                results['details']['relevance_matches'] = relevance_matches
+                relevance_score = len(relevance_matches)
+                
+                if relevance_score == 0:
+                    self._add_issue(
+                        DiagnosticCategory.TRENDS_ANALYSIS,
+                        "No connection to trending topics",
+                        "Content shows no relevance to current trending topics",
+                        PriorityLevel.LOW,
+                        25.0, 35.0,
+                        "Consider creating content around trending topics relevant to your niche"
+                    )
+                    results['score'] -= 15
+                elif relevance_score >= 3:
+                    # Bonus for high relevance
+                    results['score'] = min(100, results['score'] + 10)
+                    results['details']['high_trend_relevance'] = True
+                
+                results['details']['relevance_score'] = relevance_score
+            
+            results['details']['analysis'] = f'Analyzed relevance to {len(trending_keywords)} trending topics'
+            
+        except Exception as e:
+            logger.error(f"Trending topics analysis failed: {str(e)}")
+            results['score'] = 50
+            results['details']['error'] = str(e)
+        
+        return results

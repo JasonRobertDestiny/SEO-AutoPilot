@@ -6,7 +6,9 @@
       "Bash(curl:*)",
       "Bash(python:*)",
       "Bash(find:*)",
-      "WebFetch(domain:serpapi.com)"
+      "WebFetch(domain:serpapi.com)",
+      "Bash(pip install pytest-asyncio)",
+      "Bash(git add .claude/commands/deploy.md .claude/settings.local.json .env.example .gitignore)"
     ],
     "deny": [],
     "ask": []

@@ -472,9 +472,25 @@ def generate_ultrathinking_strategies(analysis_result, seo_score_data, llm_analy
     url = page.get('url', '')
     domain = url.split('//')[1].split('/')[0] if '//' in url else url
     
-    # Extract comprehensive analysis data
+    # Extract comprehensive analysis data with UNIFIED SCORING PRIORITY
     professional_analysis = page.get('professional_analysis', {})
-    professional_score = professional_analysis.get('overall_score', seo_score_data.get('score', 0))
+    
+    # 🎯 UNIFIED SCORE EXTRACTION - Same logic as calculate_unified_seo_score
+    if professional_analysis and professional_analysis.get('overall_score') is not None:
+        professional_score = professional_analysis.get('overall_score', 0.0)
+        score_source = 'professional_diagnostics'
+    elif seo_score_data and isinstance(seo_score_data, dict) and seo_score_data.get('score') is not None:
+        professional_score = seo_score_data.get('score', 0.0)
+        score_source = seo_score_data.get('source', 'unified_backend')
+    elif seo_score_data and isinstance(seo_score_data, (int, float)):
+        professional_score = float(seo_score_data)
+        score_source = 'numeric_backend'
+    else:
+        professional_score = 0.0
+        score_source = 'fallback_zero'
+        
+    print(f"🎯 UltraThinking Score: {professional_score:.1f} (source: {score_source})")
+    
     category_scores = professional_analysis.get('category_scores', {})
     all_issues = professional_analysis.get('all_issues', [])
     
@@ -886,12 +902,14 @@ def api_analyze():
         # 记录开始时间
         start_time = time.time()
         
-        # 第一阶段：基础分析（支持LLM分析、专业诊断和智能缓存）
+        # 第一阶段：基础分析（支持LLM分析、专业诊断、Trends分析和PageSpeed分析）
         run_llm_analysis = data.get('run_llm_analysis', True)  # 默认启用LLM分析
         run_professional_analysis = data.get('run_professional_analysis', True)  # 默认启用专业诊断
+        enable_trends_analysis = data.get('enable_trends_analysis', False)  # 可选趋势分析
+        enable_pagespeed_analysis = data.get('enable_pagespeed_analysis', False)  # 可选PageSpeed分析
         use_cache = data.get('use_cache', True)  # 默认启用智能缓存
         
-        print(f"🚀 Starting analysis for {url} (cache: {'enabled' if use_cache else 'disabled'})")
+        print(f"🚀 Starting analysis for {url} (cache: {'enabled' if use_cache else 'disabled'}, trends: {'enabled' if enable_trends_analysis else 'disabled'}, pagespeed: {'enabled' if enable_pagespeed_analysis else 'disabled'})")
         
         analysis_result = analyze(
             url=url,
@@ -901,6 +919,8 @@ def api_analyze():
             analyze_extra_tags=True,
             run_llm_analysis=run_llm_analysis,  # 启用SiliconFlow API分析
             run_professional_analysis=run_professional_analysis,  # 启用专业诊断分析
+            enable_trends_analysis=enable_trends_analysis,  # 启用SerpAPI Google Trends分析
+            enable_pagespeed_analysis=enable_pagespeed_analysis,  # 启用PageSpeed Insights分析
             use_cache=use_cache  # 启用智能缓存系统
         )
         
@@ -1357,6 +1377,769 @@ def health_check():
         'timestamp': datetime.now().isoformat(),
         'version': '1.0.0'
     })
+
+# 🔥 Trends Analysis API Endpoints
+@app.route('/api/trends/analysis', methods=['POST'])
+def trends_comprehensive_analysis():
+    """
+    🔥 Comprehensive Trends Analysis API
+    
+    Provides complete trends analysis including:
+    - Keyword trend patterns
+    - Content opportunities
+    - Seasonal insights  
+    - Competitive analysis
+    - Search intent alignment
+    - Trending topics relevance
+    """
+    try:
+        data = request.get_json()
+        if not data or 'url' not in data:
+            return jsonify({'error': 'URL is required'}), 400
+        
+        url = data['url']
+        enable_professional = data.get('enable_professional_analysis', True)
+        
+        print(f"🔥 Starting comprehensive trends analysis for: {url}")
+        
+        # Perform full SEO analysis with professional diagnostics
+        analysis_result = analyze(
+            url,
+            run_professional_analysis=enable_professional,
+            enable_trends_analysis=True,
+            use_cache=True
+        )
+        
+        # Extract trends insights from the analysis
+        trends_insights = analysis_result.get('trends_insights', {})
+        
+        # Extract professional diagnostics trends data if available
+        professional_trends = {}
+        if 'professional_diagnostics' in analysis_result:
+            diagnostic_results = analysis_result['professional_diagnostics'].get('diagnostic_results', {})
+            professional_trends = diagnostic_results.get('trends_analysis', {})
+        
+        # Combine insights for comprehensive response
+        comprehensive_trends = {
+            'url': url,
+            'timestamp': datetime.now().isoformat(),
+            'trends_insights': trends_insights,
+            'professional_trends': professional_trends,
+            'analysis_summary': {
+                'keywords_analyzed': len(analysis_result.get('keywords', [])),
+                'trends_available': bool(trends_insights),
+                'professional_analysis': bool(professional_trends),
+                'cache_used': analysis_result.get('cache_used', False)
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': comprehensive_trends,
+            'message': 'Comprehensive trends analysis completed successfully'
+        })
+        
+    except Exception as e:
+        print(f"❌ Trends analysis error: {e}")
+        return jsonify({'error': f'Trends analysis failed: {str(e)}'}), 500
+
+@app.route('/api/trends/keywords', methods=['POST'])
+def trends_keyword_analysis():
+    """
+    📈 Keyword Trends Analysis API
+    
+    Analyzes keyword trend patterns including:
+    - Rising/falling trends
+    - Search volume patterns
+    - Interest over time
+    - Related queries and topics
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request data is required'}), 400
+        
+        keywords = data.get('keywords', [])
+        url = data.get('url')
+        region = data.get('region', 'US')
+        timeframe = data.get('timeframe', 'today 12-m')
+        
+        if not keywords and not url:
+            return jsonify({'error': 'Either keywords array or URL is required'}), 400
+        
+        # Import trends analyzer
+        from pyseoanalyzer.serpapi_trends import SerpAPITrends
+        
+        trends_analyzer = SerpAPITrends()
+        
+        # If URL provided, extract keywords from page analysis
+        if url and not keywords:
+            print(f"📊 Extracting keywords from URL: {url}")
+            page_analysis = analyze(url, use_cache=True)
+            keywords = [kw['keyword'] for kw in page_analysis.get('keywords', [])[:10]]
+        
+        if not keywords:
+            return jsonify({'error': 'No keywords found for analysis'}), 400
+        
+        print(f"📈 Analyzing trends for {len(keywords)} keywords: {keywords[:5]}...")
+        
+        # Get keyword trends data
+        trends_data = trends_analyzer.get_keyword_trends(keywords, region, timeframe)
+        
+        # Format response data
+        keyword_trends = {}
+        for keyword, trend_info in trends_data.items():
+            keyword_trends[keyword] = {
+                'keyword': trend_info.keyword,
+                'average_interest': trend_info.average_interest,
+                'trend_direction': trend_info.trend_direction,
+                'region': trend_info.region,
+                'timeframe': trend_info.timeframe,
+                'interest_over_time': trend_info.interest_over_time[:12],  # Limit data size
+                'related_topics_count': len(trend_info.related_topics),
+                'related_queries_count': len(trend_info.related_queries),
+                'rising_queries_count': len(trend_info.rising_queries),
+                'peak_periods_count': len(trend_info.peak_periods)
+            }
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'keyword_trends': keyword_trends,
+                'analysis_meta': {
+                    'keywords_analyzed': len(keywords),
+                    'region': region,
+                    'timeframe': timeframe,
+                    'timestamp': datetime.now().isoformat()
+                }
+            },
+            'message': f'Keyword trends analysis completed for {len(keywords)} keywords'
+        })
+        
+    except Exception as e:
+        print(f"❌ Keyword trends error: {e}")
+        return jsonify({'error': f'Keyword trends analysis failed: {str(e)}'}), 500
+
+@app.route('/api/trends/opportunities', methods=['POST'])
+def trends_content_opportunities():
+    """
+    💡 Content Opportunities Analysis API
+    
+    Identifies content opportunities including:
+    - Content gaps
+    - Trending topics
+    - Seasonal patterns
+    - Optimization priorities
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request data is required'}), 400
+        
+        url = data.get('url')
+        keywords = data.get('keywords', [])
+        region = data.get('region', 'US')
+        
+        if not url and not keywords:
+            return jsonify({'error': 'Either URL or keywords array is required'}), 400
+        
+        # Import trends analyzer
+        from pyseoanalyzer.serpapi_trends import SerpAPITrends
+        
+        trends_analyzer = SerpAPITrends()
+        
+        # Extract keywords from URL if needed
+        if url and not keywords:
+            print(f"💡 Extracting keywords from URL for opportunities: {url}")
+            page_analysis = analyze(url, use_cache=True)
+            keywords = [kw['keyword'] for kw in page_analysis.get('keywords', [])[:15]]
+        
+        if not keywords:
+            return jsonify({'error': 'No keywords found for opportunity analysis'}), 400
+        
+        print(f"💡 Analyzing content opportunities for {len(keywords)} keywords...")
+        
+        # Get content opportunities
+        opportunities = trends_analyzer.analyze_content_opportunities(keywords, region)
+        
+        # Get trending keywords for additional opportunities
+        trending_keywords = trends_analyzer.get_trending_keywords(region=region)
+        
+        # Format response
+        content_opportunities = {
+            'keyword_analysis': opportunities.get('keyword_analysis', {}),
+            'content_suggestions': opportunities.get('content_suggestions', []),
+            'seasonal_insights': opportunities.get('seasonal_insights', []),
+            'trending_opportunities': opportunities.get('trending_opportunities', []),
+            'optimization_priorities': opportunities.get('optimization_priorities', []),
+            'trending_keywords': trending_keywords[:10],  # Top 10 trending
+            'analysis_meta': {
+                'base_keywords': len(keywords),
+                'content_suggestions_count': len(opportunities.get('content_suggestions', [])),
+                'optimization_priorities_count': len(opportunities.get('optimization_priorities', [])),
+                'trending_keywords_count': len(trending_keywords),
+                'region': region,
+                'timestamp': datetime.now().isoformat()
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': content_opportunities,
+            'message': f'Content opportunities analysis completed for {len(keywords)} keywords'
+        })
+        
+    except Exception as e:
+        print(f"❌ Content opportunities error: {e}")
+        return jsonify({'error': f'Content opportunities analysis failed: {str(e)}'}), 500
+
+@app.route('/api/trends/competitive', methods=['POST'])
+def trends_competitive_analysis():
+    """
+    🏆 Competitive Trends Analysis API
+    
+    Provides competitive analysis including:
+    - Domain keyword tracking
+    - Ranking opportunities
+    - Competitive positioning
+    - Market trends
+    """
+    try:
+        data = request.get_json()
+        if not data or 'url' not in data:
+            return jsonify({'error': 'URL is required'}), 400
+        
+        url = data['url']
+        max_keywords = data.get('max_keywords', 50)
+        
+        print(f"🏆 Starting competitive analysis for: {url}")
+        
+        # Import keyword diagnostics API
+        from pyseoanalyzer.keyword_diagnostics import KeywordComAPI
+        
+        keyword_api = KeywordComAPI()
+        
+        # Extract domain from URL
+        from urllib.parse import urlparse
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc.replace('www.', '')
+        
+        # Get competitive analysis
+        competitive_data = keyword_api.analyze_domain_keywords(domain, max_keywords)
+        
+        if 'error' in competitive_data:
+            return jsonify({
+                'success': False,
+                'data': {
+                    'domain': domain,
+                    'error': competitive_data['error'],
+                    'analysis_available': False
+                },
+                'message': f'Competitive analysis limited: {competitive_data["error"]}'
+            })
+        
+        # Format competitive analysis response
+        competitive_analysis = {
+            'domain': domain,
+            'total_keywords': competitive_data.get('total_keywords', 0),
+            'projects_analyzed': competitive_data.get('projects_analyzed', 0),
+            'keywords_data': competitive_data.get('keywords', []),
+            'analysis': competitive_data.get('analysis', {}),
+            'recommendations': competitive_data.get('recommendations', []),
+            'analysis_meta': {
+                'api_available': True,
+                'max_keywords_analyzed': max_keywords,
+                'timestamp': datetime.now().isoformat()
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': competitive_analysis,
+            'message': f'Competitive analysis completed for {domain}'
+        })
+        
+    except Exception as e:
+        print(f"❌ Competitive analysis error: {e}")
+        return jsonify({'error': f'Competitive analysis failed: {str(e)}'}), 500
+
+@app.route('/api/trends/trending', methods=['GET'])
+def trends_current_trending():
+    """
+    🌟 Current Trending Topics API
+    
+    Provides current trending keywords and topics including:
+    - Real-time trending searches
+    - Category-specific trends
+    - Regional trending data
+    """
+    try:
+        # Get query parameters
+        region = request.args.get('region', 'US')
+        category = request.args.get('category')
+        limit = int(request.args.get('limit', 20))
+        
+        print(f"🌟 Fetching trending topics for region: {region}")
+        
+        # Import trends analyzer
+        from pyseoanalyzer.serpapi_trends import SerpAPITrends
+        
+        trends_analyzer = SerpAPITrends()
+        
+        # Get trending keywords
+        trending_keywords = trends_analyzer.get_trending_keywords(category=category, region=region)
+        
+        # Limit results
+        limited_trending = trending_keywords[:limit]
+        
+        trending_data = {
+            'trending_keywords': limited_trending,
+            'analysis_meta': {
+                'region': region,
+                'category': category,
+                'total_available': len(trending_keywords),
+                'returned_count': len(limited_trending),
+                'timestamp': datetime.now().isoformat()
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': trending_data,
+            'message': f'Retrieved {len(limited_trending)} trending topics for {region}'
+        })
+        
+    except Exception as e:
+        print(f"❌ Trending topics error: {e}")
+        return jsonify({'error': f'Trending topics retrieval failed: {str(e)}'}), 500
+
+@app.route('/api/trends/status', methods=['GET'])
+def trends_api_status():
+    """
+    ⚡ Trends API Status Check
+    
+    Checks the status and availability of trends analysis APIs:
+    - SerpAPI Trends availability
+    - Keyword.com API availability
+    - API quota and rate limits
+    """
+    try:
+        status_info = {
+            'serpapi_trends': {'available': False, 'error': None},
+            'keyword_com_api': {'available': False, 'error': None},
+            'overall_status': 'degraded',
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Check SerpAPI Trends
+        try:
+            from pyseoanalyzer.serpapi_trends import SerpAPITrends
+            trends_analyzer = SerpAPITrends()
+            # Try a simple test
+            test_trends = trends_analyzer.get_trending_keywords()
+            status_info['serpapi_trends'] = {
+                'available': True,
+                'test_keywords_count': len(test_trends) if test_trends else 0
+            }
+        except Exception as e:
+            status_info['serpapi_trends'] = {
+                'available': False,
+                'error': str(e)
+            }
+        
+        # Check Keyword.com API
+        try:
+            from pyseoanalyzer.keyword_diagnostics import KeywordComAPI
+            keyword_api = KeywordComAPI()
+            # Try getting projects
+            projects = keyword_api.get_all_projects()
+            status_info['keyword_com_api'] = {
+                'available': True,
+                'projects_count': len(projects) if projects else 0
+            }
+        except Exception as e:
+            status_info['keyword_com_api'] = {
+                'available': False,
+                'error': str(e)
+            }
+        
+        # Determine overall status
+        if status_info['serpapi_trends']['available'] and status_info['keyword_com_api']['available']:
+            status_info['overall_status'] = 'healthy'
+        elif status_info['serpapi_trends']['available'] or status_info['keyword_com_api']['available']:
+            status_info['overall_status'] = 'partial'
+        else:
+            status_info['overall_status'] = 'unavailable'
+        
+        return jsonify({
+            'success': True,
+            'data': status_info,
+            'message': f'Trends API status: {status_info["overall_status"]}'
+        })
+        
+    except Exception as e:
+        print(f"❌ Trends status check error: {e}")
+        return jsonify({'error': f'Status check failed: {str(e)}'}), 500
+
+# 🚀 PageSpeed Insights API Endpoints
+@app.route('/api/pagespeed/analyze', methods=['POST'])
+def pagespeed_analyze_url():
+    """
+    🚀 PageSpeed Insights URL Analysis API
+    
+    Provides comprehensive PageSpeed analysis including:
+    - Core Web Vitals (LCP, FID, CLS, FCP, Speed Index, TTI, TBT)
+    - Performance scores for mobile and desktop
+    - SEO and accessibility scores
+    - Optimization opportunities and diagnostics
+    - Performance impact assessment
+    """
+    try:
+        data = request.get_json()
+        if not data or 'url' not in data:
+            return jsonify({'error': 'URL is required'}), 400
+        
+        url = data['url']
+        strategy = data.get('strategy', 'mobile')  # mobile or desktop
+        categories = data.get('categories', ['performance', 'seo', 'accessibility', 'best-practices'])
+        
+        print(f"🚀 Starting PageSpeed analysis for: {url} (strategy: {strategy})")
+        
+        # Import PageSpeed API
+        from pyseoanalyzer.pagespeed_insights import PageSpeedInsightsAPI
+        
+        pagespeed_api = PageSpeedInsightsAPI()
+        
+        # Perform analysis
+        analysis = pagespeed_api.analyze_url(url, strategy=strategy, categories=categories)
+        
+        # Get recommendations
+        recommendations = pagespeed_api.get_performance_recommendations(analysis)
+        
+        # Calculate impact
+        impact_assessment = pagespeed_api.calculate_performance_impact(analysis)
+        
+        # Format comprehensive response
+        pagespeed_data = {
+            'url': analysis.url,
+            'strategy': analysis.strategy,
+            'timestamp': datetime.now().isoformat(),
+            'performance_metrics': {
+                'performance_score': analysis.performance_metrics.performance_score if analysis.performance_metrics else None,
+                'seo_score': analysis.performance_metrics.seo_score if analysis.performance_metrics else None,
+                'accessibility_score': analysis.performance_metrics.accessibility_score if analysis.performance_metrics else None,
+                'best_practices_score': analysis.performance_metrics.best_practices_score if analysis.performance_metrics else None,
+                'pwa_score': analysis.performance_metrics.pwa_score if analysis.performance_metrics else None
+            },
+            'core_web_vitals': {
+                'largest_contentful_paint': analysis.performance_metrics.core_web_vitals.largest_contentful_paint if analysis.performance_metrics and analysis.performance_metrics.core_web_vitals else None,
+                'first_input_delay': analysis.performance_metrics.core_web_vitals.first_input_delay if analysis.performance_metrics and analysis.performance_metrics.core_web_vitals else None,
+                'cumulative_layout_shift': analysis.performance_metrics.core_web_vitals.cumulative_layout_shift if analysis.performance_metrics and analysis.performance_metrics.core_web_vitals else None,
+                'first_contentful_paint': analysis.performance_metrics.core_web_vitals.first_contentful_paint if analysis.performance_metrics and analysis.performance_metrics.core_web_vitals else None,
+                'speed_index': analysis.performance_metrics.core_web_vitals.speed_index if analysis.performance_metrics and analysis.performance_metrics.core_web_vitals else None,
+                'time_to_interactive': analysis.performance_metrics.core_web_vitals.time_to_interactive if analysis.performance_metrics and analysis.performance_metrics.core_web_vitals else None,
+                'total_blocking_time': analysis.performance_metrics.core_web_vitals.total_blocking_time if analysis.performance_metrics and analysis.performance_metrics.core_web_vitals else None
+            },
+            'opportunities': analysis.performance_metrics.opportunities[:10] if analysis.performance_metrics and analysis.performance_metrics.opportunities else [],
+            'diagnostics': analysis.performance_metrics.diagnostics[:10] if analysis.performance_metrics and analysis.performance_metrics.diagnostics else [],
+            'recommendations': recommendations,
+            'impact_assessment': impact_assessment,
+            'lighthouse_info': {
+                'version': analysis.lighthouse_version,
+                'user_agent': analysis.user_agent,
+                'fetch_time': analysis.fetch_time
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': pagespeed_data,
+            'message': f'PageSpeed analysis completed for {url} ({strategy})'
+        })
+        
+    except Exception as e:
+        print(f"❌ PageSpeed analysis error: {e}")
+        return jsonify({'error': f'PageSpeed analysis failed: {str(e)}'}), 500
+
+@app.route('/api/pagespeed/compare', methods=['POST'])
+def pagespeed_compare_strategies():
+    """
+    📊 PageSpeed Mobile vs Desktop Comparison API
+    
+    Compares performance metrics between mobile and desktop strategies:
+    - Side-by-side Core Web Vitals comparison
+    - Performance score differences
+    - Strategy-specific optimization recommendations
+    - Mobile-first optimization priorities
+    """
+    try:
+        data = request.get_json()
+        if not data or 'url' not in data:
+            return jsonify({'error': 'URL is required'}), 400
+        
+        url = data['url']
+        categories = data.get('categories', ['performance', 'seo', 'accessibility', 'best-practices'])
+        
+        print(f"📊 Starting PageSpeed comparison analysis for: {url}")
+        
+        # Import PageSpeed API
+        from pyseoanalyzer.pagespeed_insights import PageSpeedInsightsAPI
+        
+        pagespeed_api = PageSpeedInsightsAPI()
+        
+        # Analyze both strategies
+        comparison_results = pagespeed_api.analyze_both_strategies(url)
+        
+        mobile_analysis = comparison_results['mobile']
+        desktop_analysis = comparison_results['desktop']
+        
+        # Get recommendations for both
+        mobile_recommendations = pagespeed_api.get_performance_recommendations(mobile_analysis)
+        desktop_recommendations = pagespeed_api.get_performance_recommendations(desktop_analysis)
+        
+        # Calculate impact for both
+        mobile_impact = pagespeed_api.calculate_performance_impact(mobile_analysis)
+        desktop_impact = pagespeed_api.calculate_performance_impact(desktop_analysis)
+        
+        # Calculate comparison metrics
+        performance_diff = (desktop_analysis.performance_metrics.performance_score or 0) - (mobile_analysis.performance_metrics.performance_score or 0)
+        
+        comparison_data = {
+            'url': url,
+            'timestamp': datetime.now().isoformat(),
+            'mobile': {
+                'performance_score': mobile_analysis.performance_metrics.performance_score if mobile_analysis.performance_metrics else None,
+                'seo_score': mobile_analysis.performance_metrics.seo_score if mobile_analysis.performance_metrics else None,
+                'core_web_vitals': {
+                    'lcp': mobile_analysis.performance_metrics.core_web_vitals.largest_contentful_paint if mobile_analysis.performance_metrics and mobile_analysis.performance_metrics.core_web_vitals else None,
+                    'fid': mobile_analysis.performance_metrics.core_web_vitals.first_input_delay if mobile_analysis.performance_metrics and mobile_analysis.performance_metrics.core_web_vitals else None,
+                    'cls': mobile_analysis.performance_metrics.core_web_vitals.cumulative_layout_shift if mobile_analysis.performance_metrics and mobile_analysis.performance_metrics.core_web_vitals else None
+                },
+                'recommendations_count': len(mobile_recommendations),
+                'impact_score': mobile_impact.get('impact_score', 0),
+                'critical_issues': len([r for r in mobile_recommendations if r.get('priority') == 'high'])
+            },
+            'desktop': {
+                'performance_score': desktop_analysis.performance_metrics.performance_score if desktop_analysis.performance_metrics else None,
+                'seo_score': desktop_analysis.performance_metrics.seo_score if desktop_analysis.performance_metrics else None,
+                'core_web_vitals': {
+                    'lcp': desktop_analysis.performance_metrics.core_web_vitals.largest_contentful_paint if desktop_analysis.performance_metrics and desktop_analysis.performance_metrics.core_web_vitals else None,
+                    'fid': desktop_analysis.performance_metrics.core_web_vitals.first_input_delay if desktop_analysis.performance_metrics and desktop_analysis.performance_metrics.core_web_vitals else None,
+                    'cls': desktop_analysis.performance_metrics.core_web_vitals.cumulative_layout_shift if desktop_analysis.performance_metrics and desktop_analysis.performance_metrics.core_web_vitals else None
+                },
+                'recommendations_count': len(desktop_recommendations),
+                'impact_score': desktop_impact.get('impact_score', 0),
+                'critical_issues': len([r for r in desktop_recommendations if r.get('priority') == 'high'])
+            },
+            'comparison': {
+                'performance_score_difference': performance_diff,
+                'mobile_priority': performance_diff < -10,  # Mobile significantly worse
+                'desktop_priority': performance_diff > 10,   # Desktop significantly worse
+                'core_web_vitals_mobile_pass': mobile_impact.get('core_web_vitals_pass', False),
+                'core_web_vitals_desktop_pass': desktop_impact.get('core_web_vitals_pass', False),
+                'overall_recommendation': 'focus_mobile' if performance_diff < -10 else 'focus_desktop' if performance_diff > 10 else 'balanced_optimization'
+            },
+            'combined_recommendations': mobile_recommendations + desktop_recommendations
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': comparison_data,
+            'message': f'PageSpeed comparison completed for {url}'
+        })
+        
+    except Exception as e:
+        print(f"❌ PageSpeed comparison error: {e}")
+        return jsonify({'error': f'PageSpeed comparison failed: {str(e)}'}), 500
+
+@app.route('/api/pagespeed/recommendations', methods=['POST'])
+def pagespeed_get_recommendations():
+    """
+    💡 PageSpeed Performance Recommendations API
+    
+    Provides actionable performance recommendations including:
+    - Core Web Vitals optimization strategies
+    - Performance opportunity prioritization
+    - Implementation guidance and time estimates
+    - SEO impact assessment for each recommendation
+    """
+    try:
+        data = request.get_json()
+        if not data or 'url' not in data:
+            return jsonify({'error': 'URL is required'}), 400
+        
+        url = data['url']
+        strategy = data.get('strategy', 'mobile')
+        priority_filter = data.get('priority_filter')  # high, medium, low
+        
+        print(f"💡 Generating PageSpeed recommendations for: {url}")
+        
+        # Import PageSpeed API
+        from pyseoanalyzer.pagespeed_insights import PageSpeedInsightsAPI
+        
+        pagespeed_api = PageSpeedInsightsAPI()
+        
+        # Perform analysis
+        analysis = pagespeed_api.analyze_url(url, strategy=strategy)
+        
+        # Get detailed recommendations
+        recommendations = pagespeed_api.get_performance_recommendations(analysis)
+        
+        # Calculate performance impact
+        impact_assessment = pagespeed_api.calculate_performance_impact(analysis)
+        
+        # Filter recommendations by priority if specified
+        if priority_filter:
+            recommendations = [r for r in recommendations if r.get('priority') == priority_filter]
+        
+        # Enhance recommendations with additional context
+        enhanced_recommendations = []
+        for rec in recommendations:
+            enhanced_rec = rec.copy()
+            
+            # Add implementation estimates
+            effort_mapping = {
+                'low': {'time_estimate': '1-2 hours', 'difficulty': 'Easy', 'resources': 'Developer'},
+                'medium': {'time_estimate': '4-8 hours', 'difficulty': 'Moderate', 'resources': 'Developer + Designer'},
+                'high': {'time_estimate': '1-2 days', 'difficulty': 'Complex', 'resources': 'Senior Developer + Architect'}
+            }
+            
+            effort = enhanced_rec.get('effort', 'medium')
+            enhanced_rec.update(effort_mapping.get(effort, effort_mapping['medium']))
+            
+            # Add SEO impact scoring
+            seo_impact_score = 0
+            if enhanced_rec.get('category') == 'core_web_vitals':
+                seo_impact_score = 9  # Core Web Vitals are critical for SEO
+            elif enhanced_rec.get('category') == 'performance':
+                seo_impact_score = 7  # Performance affects user experience and rankings
+            elif enhanced_rec.get('category') == 'seo_performance':
+                seo_impact_score = 8  # Direct SEO impact
+            else:
+                seo_impact_score = 5  # Moderate impact
+            
+            enhanced_rec['seo_impact_score'] = seo_impact_score
+            enhanced_rec['seo_impact_level'] = 'critical' if seo_impact_score >= 8 else 'high' if seo_impact_score >= 6 else 'medium'
+            
+            enhanced_recommendations.append(enhanced_rec)
+        
+        # Sort by priority and SEO impact
+        priority_order = {'high': 3, 'medium': 2, 'low': 1}
+        enhanced_recommendations.sort(
+            key=lambda x: (priority_order.get(x.get('priority', 'medium'), 2), x.get('seo_impact_score', 0)), 
+            reverse=True
+        )
+        
+        recommendations_data = {
+            'url': url,
+            'strategy': strategy,
+            'timestamp': datetime.now().isoformat(),
+            'total_recommendations': len(enhanced_recommendations),
+            'high_priority_count': len([r for r in enhanced_recommendations if r.get('priority') == 'high']),
+            'medium_priority_count': len([r for r in enhanced_recommendations if r.get('priority') == 'medium']),
+            'low_priority_count': len([r for r in enhanced_recommendations if r.get('priority') == 'low']),
+            'core_web_vitals_issues': len([r for r in enhanced_recommendations if r.get('category') == 'core_web_vitals']),
+            'performance_score': analysis.performance_metrics.performance_score if analysis.performance_metrics else None,
+            'impact_assessment': impact_assessment,
+            'recommendations': enhanced_recommendations
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': recommendations_data,
+            'message': f'Generated {len(enhanced_recommendations)} PageSpeed recommendations for {url}'
+        })
+        
+    except Exception as e:
+        print(f"❌ PageSpeed recommendations error: {e}")
+        return jsonify({'error': f'PageSpeed recommendations failed: {str(e)}'}), 500
+
+@app.route('/api/pagespeed/status', methods=['GET'])
+def pagespeed_api_status():
+    """
+    ⚡ PageSpeed Insights API Status Check
+    
+    Checks the status and availability of PageSpeed Insights API:
+    - API key validation
+    - Rate limit status
+    - Service availability
+    - Performance benchmarks
+    """
+    try:
+        status_info = {
+            'pagespeed_api': {'available': False, 'error': None},
+            'api_key_status': 'unknown',
+            'overall_status': 'degraded',
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Check PageSpeed Insights API
+        try:
+            from pyseoanalyzer.pagespeed_insights import PageSpeedInsightsAPI
+            
+            pagespeed_api = PageSpeedInsightsAPI()
+            
+            if pagespeed_api.api_key:
+                # Try a simple test analysis
+                test_analysis = pagespeed_api.analyze_url("https://www.google.com", strategy="mobile")
+                
+                if test_analysis.performance_metrics:
+                    status_info['pagespeed_api'] = {
+                        'available': True,
+                        'api_key_valid': True,
+                        'test_performance_score': test_analysis.performance_metrics.performance_score,
+                        'lighthouse_version': test_analysis.lighthouse_version
+                    }
+                    status_info['api_key_status'] = 'valid'
+                else:
+                    status_info['pagespeed_api'] = {
+                        'available': True,
+                        'api_key_valid': False,
+                        'note': 'API accessible but limited functionality'
+                    }
+                    status_info['api_key_status'] = 'limited'
+            else:
+                status_info['pagespeed_api'] = {
+                    'available': False,
+                    'api_key_valid': False,
+                    'error': 'No API key configured'
+                }
+                status_info['api_key_status'] = 'missing'
+                
+        except Exception as e:
+            status_info['pagespeed_api'] = {
+                'available': False,
+                'error': str(e),
+                'api_key_valid': False
+            }
+            status_info['api_key_status'] = 'error'
+        
+        # Determine overall status
+        if status_info['pagespeed_api']['available'] and status_info['api_key_status'] == 'valid':
+            status_info['overall_status'] = 'healthy'
+        elif status_info['pagespeed_api']['available']:
+            status_info['overall_status'] = 'partial'
+        else:
+            status_info['overall_status'] = 'unavailable'
+        
+        # Add usage recommendations
+        status_info['recommendations'] = []
+        if status_info['api_key_status'] == 'missing':
+            status_info['recommendations'].append('Configure PAGESPEED_INSIGHTS_API_KEY environment variable')
+        elif status_info['api_key_status'] == 'error':
+            status_info['recommendations'].append('Verify API key validity and network connectivity')
+        elif status_info['api_key_status'] == 'valid':
+            status_info['recommendations'].append('PageSpeed Insights API is fully functional')
+        
+        return jsonify({
+            'success': True,
+            'data': status_info,
+            'message': f'PageSpeed API status: {status_info["overall_status"]}'
+        })
+        
+    except Exception as e:
+        print(f"❌ PageSpeed status check error: {e}")
+        return jsonify({'error': f'PageSpeed status check failed: {str(e)}'}), 500
 
 if __name__ == '__main__':
     # 根据环境变量决定是否启用调试模式

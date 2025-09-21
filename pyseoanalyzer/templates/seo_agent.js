@@ -152,6 +152,9 @@ class SEOAgent {
             case 'seo-strategy':
                 this.updateSEOStrategySection();
                 break;
+            case 'trends-analysis': // 🔥 Add trends analysis section
+                this.updateTrendsAnalysisSection();
+                break;
         }
     }
 
@@ -525,50 +528,50 @@ class SEOAgent {
             const passedCount = document.getElementById('passedCount');
             const scoreDescription = document.getElementById('scoreDescription');
             
-            // UNIFIED SCORING SYSTEM - Priority Order with Debug Logging
-            let score = 75; // Default fallback
-            let scoreSource = 'fallback';
+            // 🎯 UNIFIED SCORING SYSTEM - Enhanced consistency with backend
+            let score = 0; // Start with 0 instead of arbitrary 75
+            let scoreSource = 'none_found';
             
-            console.log('=== SEO Score Debug Info ===');
+            console.log('=== 🎯 UNIFIED SEO SCORE DEBUG ===');
             console.log('Current Analysis Object:', this.currentAnalysis);
             console.log('Data Parameter:', data);
             
-            // PRIORITY 1: Backend Unified SEO Score (Most Accurate)
+            // 🥇 PRIORITY 1: Backend Unified SEO Score (Most Accurate)
             if (this.currentAnalysis?.seo_score !== undefined) {
                 const scoreData = this.currentAnalysis.seo_score;
                 if (typeof scoreData === 'object' && scoreData.score !== undefined && scoreData.score !== null) {
                     score = Math.round(scoreData.score * 10) / 10;
                     scoreSource = scoreData.source || 'backend_unified';
                     console.log('✅ Using Backend Unified Score:', score, 'Source:', scoreData.source);
-                } else if (typeof scoreData === 'number' && !isNaN(scoreData)) {
+                } else if (typeof scoreData === 'number' && !isNaN(scoreData) && scoreData > 0) {
                     score = Math.round(scoreData * 10) / 10;
                     scoreSource = 'backend_number';
                     console.log('✅ Using Backend Number Score:', score);
                 }
             }
             
-            // PRIORITY 2: Professional Analysis Overall Score (Fallback)
-            else if (this.currentAnalysis?.analysis?.pages?.[0]?.professional_analysis?.overall_score !== undefined) {
+            // 🥈 PRIORITY 2: Professional Analysis Overall Score (Fallback)
+            if (score === 0 && this.currentAnalysis?.analysis?.pages?.[0]?.professional_analysis?.overall_score !== undefined) {
                 const professionalScore = this.currentAnalysis.analysis.pages[0].professional_analysis.overall_score;
-                if (professionalScore !== null && !isNaN(professionalScore)) {
+                if (professionalScore !== null && !isNaN(professionalScore) && professionalScore > 0) {
                     score = Math.round(professionalScore * 10) / 10;
                     scoreSource = 'professional_analysis';
                     console.log('✅ Using Professional Analysis Score:', score);
                 }
             }
             
-            // PRIORITY 3: Frontend Calculation (Last Resort)
-            else {
+            // 🥉 PRIORITY 3: Frontend Calculation (Last Resort)
+            if (score === 0) {
                 score = this.calculateSEOScore(data);
                 scoreSource = 'frontend_calculation';
-                console.log('⚠️ Using Frontend Calculation Score:', score);
+                console.log('⚠️ Using Frontend Calculation Score (Last Resort):', score);
             }
             
             // Ensure score is within valid range
             score = Math.max(0, Math.min(100, score));
             
-            console.log('Final Score Used:', score, 'Source:', scoreSource);
-            console.log('=== End Score Debug ===');
+            console.log('🎯 Final Unified Score:', score, 'Source:', scoreSource);
+            console.log('=== End Unified Score Debug ===');
             
             // Professional color scheme based on score
             let color = '#ef4444';
@@ -943,6 +946,7 @@ class SEOAgent {
         this.updateHeadingStructure(page);
         this.updateKeywordDensity(data);
         this.updateImagesList(page);
+        this.updateTrendsAnalysis(data); // 🔥 Add trends analysis update
     }
 
     updateHeadingStructure(page) {
@@ -1018,6 +1022,497 @@ class SEOAgent {
             `).join('') || '<div class="text-sm text-green-600">All images have alt attributes</div>';
         } else {
             container.innerHTML = '<div class="text-sm text-gray-500">No images found</div>';
+        }
+    }
+
+    updateTrendsAnalysisSection() {
+        // Fetch trends data from backend API and update the trends section
+        this.fetchTrendsData();
+    }
+
+    async fetchTrendsData() {
+        const urlInput = document.getElementById('urlInput');
+        const url = urlInput?.value?.trim();
+        
+        if (!url || !this.currentAnalysis) {
+            this.updateTrendsPlaceholder('No URL available for trends analysis');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/trends/analysis`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ url: url })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Trends API error: ${response.status}`);
+            }
+
+            const trendsData = await response.json();
+            console.log('🔥 Trends data received:', trendsData);
+            
+            this.updateTrendsDisplay(trendsData);
+            
+        } catch (error) {
+            console.error('Failed to fetch trends data:', error);
+            this.updateTrendsPlaceholder(`Trends analysis unavailable: ${error.message}`);
+        }
+    }
+
+    updateTrendsDisplay(trendsData) {
+        // Update all trends components with fetched data
+        this.updateKeywordTrendsTable(trendsData.keyword_trends || []);
+        this.updateContentOpportunities(trendsData.content_opportunities || []);
+        this.updateTrendingTopics(trendsData.trending_topics || []);
+        this.updateSeasonalInsights(trendsData.seasonal_insights || {});
+        this.updateCompetitiveAnalysis(trendsData.competitive_analysis || {});
+        this.createTrendsCharts(trendsData);
+    }
+
+    updateKeywordTrendsTable(keywordTrends) {
+        const container = document.getElementById('keywordTrendsTable');
+        if (!container) {
+            console.warn('Keyword trends table container not found');
+            return;
+        }
+
+        if (!keywordTrends || keywordTrends.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-4">No keyword trends data available</p>';
+            return;
+        }
+
+        const tableHTML = `
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Keyword</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Interest Score</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trend</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Related Queries</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        ${keywordTrends.slice(0, 10).map(trend => {
+                            const trendIcon = trend.trend_direction === 'rising' ? '📈' : 
+                                            trend.trend_direction === 'falling' ? '📉' : '➡️';
+                            const trendColor = trend.trend_direction === 'rising' ? 'text-green-600' : 
+                                             trend.trend_direction === 'falling' ? 'text-red-600' : 'text-gray-600';
+                            
+                            return `
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        ${trend.keyword || 'Unknown'}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        <div class="flex items-center">
+                                            <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                                <div class="bg-blue-600 h-2 rounded-full" style="width: ${trend.interest_score || 0}%"></div>
+                                            </div>
+                                            <span>${trend.interest_score || 0}%</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm ${trendColor}">
+                                        <span class="inline-flex items-center">
+                                            ${trendIcon} ${trend.trend_direction || 'stable'}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm text-gray-500">
+                                        <div class="max-w-xs truncate">
+                                            ${(trend.related_queries || []).slice(0, 3).join(', ') || 'No related queries'}
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        container.innerHTML = tableHTML;
+    }
+
+    updateContentOpportunities(opportunities) {
+        const container = document.getElementById('contentOpportunities');
+        if (!container) {
+            console.warn('Content opportunities container not found');
+            return;
+        }
+
+        if (!opportunities || opportunities.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-4">No content opportunities identified</p>';
+            return;
+        }
+
+        const opportunitiesHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                ${opportunities.slice(0, 9).map(opp => {
+                    const priorityClass = {
+                        'high': 'border-red-200 bg-red-50',
+                        'medium': 'border-yellow-200 bg-yellow-50',
+                        'low': 'border-green-200 bg-green-50'
+                    }[opp.priority] || 'border-gray-200 bg-gray-50';
+                    
+                    const priorityIcon = {
+                        'high': '🔥',
+                        'medium': '⚡',
+                        'low': '💡'
+                    }[opp.priority] || '📝';
+
+                    return `
+                        <div class="border ${priorityClass} rounded-lg p-4 hover:shadow-md transition-shadow">
+                            <div class="flex items-start justify-between mb-2">
+                                <h4 class="text-sm font-semibold text-gray-900 flex-1">
+                                    ${priorityIcon} ${opp.topic || 'Content Topic'}
+                                </h4>
+                                <span class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                                    ${opp.priority || 'medium'}
+                                </span>
+                            </div>
+                            <p class="text-sm text-gray-600 mb-3">
+                                ${opp.description || 'Content opportunity description'}
+                            </p>
+                            <div class="flex justify-between items-center text-xs text-gray-500">
+                                <span>Search Volume: ${opp.search_volume || 'N/A'}</span>
+                                <span>Competition: ${opp.competition || 'Unknown'}</span>
+                            </div>
+                            ${opp.related_keywords && opp.related_keywords.length > 0 ? `
+                                <div class="mt-2 pt-2 border-t border-gray-200">
+                                    <p class="text-xs text-gray-500 mb-1">Related Keywords:</p>
+                                    <div class="flex flex-wrap gap-1">
+                                        ${opp.related_keywords.slice(0, 3).map(kw => 
+                                            `<span class="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">${kw}</span>`
+                                        ).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+
+        container.innerHTML = opportunitiesHTML;
+    }
+
+    updateTrendingTopics(trendingTopics) {
+        const container = document.getElementById('trendingTopics');
+        if (!container) {
+            console.warn('Trending topics container not found');
+            return;
+        }
+
+        if (!trendingTopics || trendingTopics.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-4">No trending topics available</p>';
+            return;
+        }
+
+        const topicsHTML = `
+            <div class="space-y-3">
+                ${trendingTopics.slice(0, 8).map((topic, index) => {
+                    const rankIcon = index < 3 ? ['🥇', '🥈', '🥉'][index] : `${index + 1}`;
+                    const trendPercent = topic.growth_rate || 0;
+                    const trendColor = trendPercent > 0 ? 'text-green-600' : 
+                                     trendPercent < 0 ? 'text-red-600' : 'text-gray-600';
+                    
+                    return `
+                        <div class="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+                            <div class="flex items-center space-x-3 flex-1">
+                                <span class="text-lg font-bold text-gray-400 w-8">${rankIcon}</span>
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-medium text-gray-900">${topic.topic || topic.title || 'Trending Topic'}</h4>
+                                    <p class="text-xs text-gray-500">${topic.category || 'General'}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm font-medium ${trendColor}">
+                                    ${trendPercent > 0 ? '+' : ''}${trendPercent}%
+                                </div>
+                                <div class="text-xs text-gray-500">
+                                    ${topic.search_volume || 'N/A'} searches
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+
+        container.innerHTML = topicsHTML;
+    }
+
+    updateSeasonalInsights(seasonalData) {
+        const container = document.getElementById('seasonalInsights');
+        if (!container) {
+            console.warn('Seasonal insights container not found');
+            return;
+        }
+
+        if (!seasonalData || Object.keys(seasonalData).length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-4">No seasonal insights available</p>';
+            return;
+        }
+
+        const insights = seasonalData.insights || [];
+        const currentSeason = seasonalData.current_season || 'Unknown';
+        const seasonalScore = seasonalData.seasonal_score || 0;
+
+        const insightsHTML = `
+            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mb-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-lg font-semibold text-gray-900">🌟 Current Season: ${currentSeason}</h4>
+                    <div class="text-right">
+                        <div class="text-sm text-gray-600">Seasonal Relevance Score</div>
+                        <div class="text-xl font-bold text-indigo-600">${seasonalScore}/100</div>
+                    </div>
+                </div>
+                ${insights.length > 0 ? `
+                    <div class="space-y-2">
+                        ${insights.slice(0, 5).map(insight => `
+                            <div class="flex items-start space-x-2 text-sm">
+                                <span class="text-indigo-500">•</span>
+                                <span class="text-gray-700">${insight.message || insight}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '<p class="text-gray-600 text-sm">No specific seasonal insights available</p>'}
+            </div>
+        `;
+
+        container.innerHTML = insightsHTML;
+    }
+
+    updateCompetitiveAnalysis(competitiveData) {
+        const container = document.getElementById('competitiveAnalysis');
+        if (!container) {
+            console.warn('Competitive analysis container not found');
+            return;
+        }
+
+        if (!competitiveData || Object.keys(competitiveData).length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-4">No competitive analysis available</p>';
+            return;
+        }
+
+        const competitors = competitiveData.competitors || [];
+        const marketShare = competitiveData.market_share || 0;
+        const competitiveGaps = competitiveData.gaps || [];
+
+        const competitiveHTML = `
+            <div class="space-y-4">
+                <!-- Market Position -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="text-md font-semibold text-gray-900 mb-2">📊 Market Position</h4>
+                    <div class="flex items-center space-x-4">
+                        <div class="flex-1">
+                            <div class="text-sm text-gray-600">Estimated Market Share</div>
+                            <div class="text-2xl font-bold text-blue-600">${marketShare.toFixed(1)}%</div>
+                        </div>
+                        <div class="w-24 bg-gray-200 rounded-full h-3">
+                            <div class="bg-blue-600 h-3 rounded-full" style="width: ${marketShare}%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Competitors -->
+                ${competitors.length > 0 ? `
+                    <div class="bg-white border border-gray-200 rounded-lg p-4">
+                        <h4 class="text-md font-semibold text-gray-900 mb-3">🏆 Top Competitors</h4>
+                        <div class="space-y-2">
+                            ${competitors.slice(0, 5).map((comp, index) => `
+                                <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                                    <div class="flex items-center space-x-3">
+                                        <span class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-medium">
+                                            ${index + 1}
+                                        </span>
+                                        <span class="text-sm font-medium text-gray-900">${comp.domain || comp.name || 'Unknown'}</span>
+                                    </div>
+                                    <div class="text-sm text-gray-600">
+                                        ${comp.market_share ? `${comp.market_share}% share` : 'Competitor'}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- Competitive Gaps -->
+                ${competitiveGaps.length > 0 ? `
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <h4 class="text-md font-semibold text-gray-900 mb-3">⚠️ Competitive Gaps</h4>
+                        <div class="space-y-2">
+                            ${competitiveGaps.slice(0, 4).map(gap => `
+                                <div class="flex items-start space-x-2 text-sm">
+                                    <span class="text-yellow-600 mt-0.5">⚡</span>
+                                    <span class="text-gray-700">${gap.description || gap}</span>
+                                    ${gap.priority ? `<span class="ml-auto text-xs px-2 py-1 rounded bg-yellow-200 text-yellow-800">${gap.priority}</span>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
+        container.innerHTML = competitiveHTML;
+    }
+
+    createTrendsCharts(trendsData) {
+        // Create interactive charts for trends visualization
+        this.createKeywordTrendsChart(trendsData.keyword_trends || []);
+        this.createOpportunityChart(trendsData.content_opportunities || []);
+        this.createSeasonalChart(trendsData.seasonal_insights || {});
+    }
+
+    createKeywordTrendsChart(keywordTrends) {
+        const canvas = document.getElementById('keywordTrendsChart');
+        if (!canvas || !keywordTrends.length) return;
+
+        // Destroy existing chart
+        if (this.charts?.keywordTrends) {
+            this.charts.keywordTrends.destroy();
+        }
+
+        if (!this.charts) this.charts = {};
+
+        const ctx = canvas.getContext('2d');
+        this.charts.keywordTrends = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: keywordTrends.slice(0, 8).map(trend => trend.keyword),
+                datasets: [{
+                    label: 'Search Interest Trend',
+                    data: keywordTrends.slice(0, 8).map(trend => trend.interest_score || 0),
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Keyword Interest Trends',
+                        font: { size: 14, weight: 'bold' }
+                    },
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: {
+                            display: true,
+                            text: 'Interest Score (%)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Keywords'
+                        },
+                        ticks: {
+                            maxRotation: 45
+                        }
+                    }
+                }
+            }
+        });
+
+        console.log('✅ Keyword trends chart created successfully');
+    }
+
+    createOpportunityChart(opportunities) {
+        const canvas = document.getElementById('opportunityChart');
+        if (!canvas || !opportunities.length) return;
+
+        // Destroy existing chart
+        if (this.charts?.opportunity) {
+            this.charts.opportunity.destroy();
+        }
+
+        if (!this.charts) this.charts = {};
+
+        const priorityCounts = {
+            high: opportunities.filter(opp => opp.priority === 'high').length,
+            medium: opportunities.filter(opp => opp.priority === 'medium').length,
+            low: opportunities.filter(opp => opp.priority === 'low').length
+        };
+
+        const ctx = canvas.getContext('2d');
+        this.charts.opportunity = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['High Priority', 'Medium Priority', 'Low Priority'],
+                datasets: [{
+                    data: [priorityCounts.high, priorityCounts.medium, priorityCounts.low],
+                    backgroundColor: [
+                        'rgba(239, 68, 68, 0.8)',   // High - Red
+                        'rgba(245, 158, 11, 0.8)',  // Medium - Orange
+                        'rgba(16, 185, 129, 0.8)'   // Low - Green
+                    ],
+                    borderColor: [
+                        'rgba(239, 68, 68, 1)',
+                        'rgba(245, 158, 11, 1)',
+                        'rgba(16, 185, 129, 1)'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `Content Opportunities (${opportunities.length} total)`,
+                        font: { size: 14, weight: 'bold' }
+                    },
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+
+        console.log('✅ Opportunity chart created successfully');
+    }
+
+    updateTrendsPlaceholder(message) {
+        // Show placeholder message for trends section
+        const containers = [
+            'keywordTrendsTable',
+            'contentOpportunities', 
+            'trendingTopics',
+            'seasonalInsights',
+            'competitiveAnalysis'
+        ];
+
+        containers.forEach(containerId => {
+            const container = document.getElementById(containerId);
+            if (container) {
+                container.innerHTML = `<p class="text-gray-500 text-center py-8">${message}</p>`;
+            }
+        });
+    }
+
+    updateTrendsAnalysis(data) {
+        // Updated trends analysis method that handles both data sources
+        if (data && data.trends_insights) {
+            // Use trends data if available
+            this.updateTrendsDisplay(data.trends_insights);
+        } else {
+            // Fetch trends data from API
+            this.fetchTrendsData();
         }
     }
 

@@ -49,6 +49,10 @@ build/
 
 .DS_Store
 
+# Files not to commit
+keyword_api.markdown
+roadmap.markdown
+
 # ipython
 *.ipynb
 .ipynb_checkpoints/*

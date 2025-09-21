@@ -4,6 +4,8 @@ from .website import Website
 from .seo_optimizer import enhance_analysis_with_optimization
 from .google_integrator import GoogleDataIntegrator
 from .intelligent_cache import get_cached_analysis, cache_analysis_result
+from .serpapi_trends import SerpAPITrends
+from .pagespeed_insights import PageSpeedInsightsAPI
 
 
 def calc_total_time(start_time):
@@ -19,10 +21,12 @@ def analyze(
     run_llm_analysis=False,
     run_professional_analysis=True,
     enable_google_integration=False,
+    enable_trends_analysis=False,
+    enable_pagespeed_analysis=False,
     use_cache=True,  # Enable caching by default
 ):
     """
-    🚀 Enhanced SEO analysis with intelligent caching
+    🚀 Enhanced SEO analysis with intelligent caching, trends, and PageSpeed integration
     
     Args:
         url: Website URL to analyze
@@ -33,10 +37,12 @@ def analyze(
         run_llm_analysis: Enable LLM analysis
         run_professional_analysis: Enable professional diagnostics
         enable_google_integration: Enable Google API integration
+        enable_trends_analysis: Enable SerpAPI Google Trends analysis
+        enable_pagespeed_analysis: Enable PageSpeed Insights API analysis
         use_cache: Enable intelligent caching (default: True)
     
     Returns:
-        Enhanced analysis results with caching support
+        Enhanced analysis results with caching, trends, and performance support
     """
     start_time = time.time()
     
@@ -50,7 +56,9 @@ def analyze(
             'follow_links': follow_links,
             'run_llm_analysis': run_llm_analysis,
             'run_professional_analysis': run_professional_analysis,
-            'enable_google_integration': enable_google_integration
+            'enable_google_integration': enable_google_integration,
+            'enable_trends_analysis': enable_trends_analysis,
+            'enable_pagespeed_analysis': enable_pagespeed_analysis
         }
         
         # Try to get cached result
@@ -67,6 +75,8 @@ def analyze(
         "errors": [],
         "total_time": 0,  # Initialize to 0 before calculation
         "google_insights": None,
+        "trends_insights": None,
+        "pagespeed_insights": None,
     }
 
     site = Website(
@@ -136,6 +146,144 @@ def analyze(
     output["keywords"] = sorted(
         output["keywords"], key=itemgetter("count"), reverse=True
     )
+    
+    # 🔥 Add Google Trends analysis if enabled
+    if enable_trends_analysis and output["keywords"]:
+        try:
+            # Extract top keywords for trends analysis
+            top_keywords = [kw["keyword"] for kw in output["keywords"][:10]]  # Top 10 keywords
+            
+            trends_analyzer = SerpAPITrends()
+            trends_data = trends_analyzer.get_keyword_trends(top_keywords)
+            content_opportunities = trends_analyzer.analyze_content_opportunities(top_keywords)
+            
+            # Enhance keywords with trends data
+            for keyword_obj in output["keywords"]:
+                keyword = keyword_obj["keyword"]
+                if keyword in trends_data:
+                    trend_info = trends_data[keyword]
+                    keyword_obj["trend_data"] = {
+                        "average_interest": trend_info.average_interest,
+                        "trend_direction": trend_info.trend_direction,
+                        "related_queries_count": len(trend_info.related_queries),
+                        "rising_queries_count": len(trend_info.rising_queries),
+                        "peak_periods": len(trend_info.peak_periods)
+                    }
+            
+            # Add comprehensive trends insights
+            output["trends_insights"] = {
+                "analysis_summary": {
+                    "analyzed_keywords": len(trends_data),
+                    "rising_trends": len([t for t in trends_data.values() if t.trend_direction == "rising"]),
+                    "falling_trends": len([t for t in trends_data.values() if t.trend_direction == "falling"]),
+                    "stable_trends": len([t for t in trends_data.values() if t.trend_direction == "stable"])
+                },
+                "content_opportunities": content_opportunities,
+                "trends_data": {k: {
+                    "keyword": v.keyword,
+                    "average_interest": v.average_interest,
+                    "trend_direction": v.trend_direction,
+                    "related_topics_count": len(v.related_topics),
+                    "related_queries_count": len(v.related_queries),
+                    "rising_queries_count": len(v.rising_queries),
+                    "peak_periods_count": len(v.peak_periods)
+                } for k, v in trends_data.items()}
+            }
+            
+            print(f"🔥 Trends analysis completed for {len(trends_data)} keywords")
+            
+        except Exception as e:
+            output["errors"].append(f"Trends analysis failed: {str(e)}")
+            print(f"⚠️ Trends analysis error: {str(e)}")
+
+    # 🚀 Add PageSpeed Insights analysis if enabled
+    if enable_pagespeed_analysis:
+        try:
+            print(f"🚀 Starting PageSpeed Insights analysis for {url}")
+            
+            pagespeed_api = PageSpeedInsightsAPI()
+            
+            # Analyze both mobile and desktop performance
+            mobile_analysis = pagespeed_api.analyze_url(url, strategy="mobile")
+            desktop_analysis = pagespeed_api.analyze_url(url, strategy="desktop")
+            
+            # Get performance recommendations
+            mobile_recommendations = pagespeed_api.get_performance_recommendations(mobile_analysis)
+            desktop_recommendations = pagespeed_api.get_performance_recommendations(desktop_analysis)
+            
+            # Calculate performance impact
+            mobile_impact = pagespeed_api.calculate_performance_impact(mobile_analysis)
+            desktop_impact = pagespeed_api.calculate_performance_impact(desktop_analysis)
+            
+            # Combine insights
+            output["pagespeed_insights"] = {
+                "mobile": {
+                    "analysis": {
+                        "url": mobile_analysis.url,
+                        "strategy": mobile_analysis.strategy,
+                        "performance_score": mobile_analysis.performance_metrics.performance_score if mobile_analysis.performance_metrics else None,
+                        "seo_score": mobile_analysis.performance_metrics.seo_score if mobile_analysis.performance_metrics else None,
+                        "accessibility_score": mobile_analysis.performance_metrics.accessibility_score if mobile_analysis.performance_metrics else None,
+                        "best_practices_score": mobile_analysis.performance_metrics.best_practices_score if mobile_analysis.performance_metrics else None,
+                        "core_web_vitals": {
+                            "lcp": mobile_analysis.performance_metrics.core_web_vitals.largest_contentful_paint if mobile_analysis.performance_metrics and mobile_analysis.performance_metrics.core_web_vitals else None,
+                            "fid": mobile_analysis.performance_metrics.core_web_vitals.first_input_delay if mobile_analysis.performance_metrics and mobile_analysis.performance_metrics.core_web_vitals else None,
+                            "cls": mobile_analysis.performance_metrics.core_web_vitals.cumulative_layout_shift if mobile_analysis.performance_metrics and mobile_analysis.performance_metrics.core_web_vitals else None,
+                            "fcp": mobile_analysis.performance_metrics.core_web_vitals.first_contentful_paint if mobile_analysis.performance_metrics and mobile_analysis.performance_metrics.core_web_vitals else None,
+                            "si": mobile_analysis.performance_metrics.core_web_vitals.speed_index if mobile_analysis.performance_metrics and mobile_analysis.performance_metrics.core_web_vitals else None,
+                            "tti": mobile_analysis.performance_metrics.core_web_vitals.time_to_interactive if mobile_analysis.performance_metrics and mobile_analysis.performance_metrics.core_web_vitals else None,
+                            "tbt": mobile_analysis.performance_metrics.core_web_vitals.total_blocking_time if mobile_analysis.performance_metrics and mobile_analysis.performance_metrics.core_web_vitals else None
+                        },
+                        "lighthouse_version": mobile_analysis.lighthouse_version,
+                        "fetch_time": mobile_analysis.fetch_time
+                    },
+                    "recommendations": mobile_recommendations,
+                    "impact_assessment": mobile_impact,
+                    "opportunities": mobile_analysis.performance_metrics.opportunities[:10] if mobile_analysis.performance_metrics and mobile_analysis.performance_metrics.opportunities else []
+                },
+                "desktop": {
+                    "analysis": {
+                        "url": desktop_analysis.url,
+                        "strategy": desktop_analysis.strategy,
+                        "performance_score": desktop_analysis.performance_metrics.performance_score if desktop_analysis.performance_metrics else None,
+                        "seo_score": desktop_analysis.performance_metrics.seo_score if desktop_analysis.performance_metrics else None,
+                        "accessibility_score": desktop_analysis.performance_metrics.accessibility_score if desktop_analysis.performance_metrics else None,
+                        "best_practices_score": desktop_analysis.performance_metrics.best_practices_score if desktop_analysis.performance_metrics else None,
+                        "core_web_vitals": {
+                            "lcp": desktop_analysis.performance_metrics.core_web_vitals.largest_contentful_paint if desktop_analysis.performance_metrics and desktop_analysis.performance_metrics.core_web_vitals else None,
+                            "fid": desktop_analysis.performance_metrics.core_web_vitals.first_input_delay if desktop_analysis.performance_metrics and desktop_analysis.performance_metrics.core_web_vitals else None,
+                            "cls": desktop_analysis.performance_metrics.core_web_vitals.cumulative_layout_shift if desktop_analysis.performance_metrics and desktop_analysis.performance_metrics.core_web_vitals else None,
+                            "fcp": desktop_analysis.performance_metrics.core_web_vitals.first_contentful_paint if desktop_analysis.performance_metrics and desktop_analysis.performance_metrics.core_web_vitals else None,
+                            "si": desktop_analysis.performance_metrics.core_web_vitals.speed_index if desktop_analysis.performance_metrics and desktop_analysis.performance_metrics.core_web_vitals else None,
+                            "tti": desktop_analysis.performance_metrics.core_web_vitals.time_to_interactive if desktop_analysis.performance_metrics and desktop_analysis.performance_metrics.core_web_vitals else None,
+                            "tbt": desktop_analysis.performance_metrics.core_web_vitals.total_blocking_time if desktop_analysis.performance_metrics and desktop_analysis.performance_metrics.core_web_vitals else None
+                        },
+                        "lighthouse_version": desktop_analysis.lighthouse_version,
+                        "fetch_time": desktop_analysis.fetch_time
+                    },
+                    "recommendations": desktop_recommendations,
+                    "impact_assessment": desktop_impact,
+                    "opportunities": desktop_analysis.performance_metrics.opportunities[:10] if desktop_analysis.performance_metrics and desktop_analysis.performance_metrics.opportunities else []
+                },
+                "summary": {
+                    "mobile_performance_score": mobile_analysis.performance_metrics.performance_score if mobile_analysis.performance_metrics else None,
+                    "desktop_performance_score": desktop_analysis.performance_metrics.performance_score if desktop_analysis.performance_metrics else None,
+                    "average_performance_score": (
+                        (mobile_analysis.performance_metrics.performance_score or 0) + 
+                        (desktop_analysis.performance_metrics.performance_score or 0)
+                    ) / 2 if mobile_analysis.performance_metrics and desktop_analysis.performance_metrics else None,
+                    "core_web_vitals_pass": mobile_impact.get("core_web_vitals_pass", False),
+                    "seo_critical_issues": mobile_impact.get("seo_critical", False) or desktop_impact.get("seo_critical", False),
+                    "total_recommendations": len(mobile_recommendations) + len(desktop_recommendations),
+                    "high_priority_recommendations": len([r for r in mobile_recommendations + desktop_recommendations if r.get("priority") == "high"])
+                }
+            }
+            
+            print(f"🚀 PageSpeed analysis completed - Mobile: {mobile_analysis.performance_metrics.performance_score if mobile_analysis.performance_metrics else 'N/A'}/100, Desktop: {desktop_analysis.performance_metrics.performance_score if desktop_analysis.performance_metrics else 'N/A'}/100")
+            
+        except Exception as e:
+            output["errors"].append(f"PageSpeed analysis failed: {str(e)}")
+            print(f"⚠️ PageSpeed analysis error: {str(e)}")
 
     output["total_time"] = calc_total_time(start_time)
 
@@ -172,7 +320,9 @@ def analyze(
             'follow_links': follow_links,
             'run_llm_analysis': run_llm_analysis,
             'run_professional_analysis': run_professional_analysis,
-            'enable_google_integration': enable_google_integration
+            'enable_google_integration': enable_google_integration,
+            'enable_trends_analysis': enable_trends_analysis,
+            'enable_pagespeed_analysis': enable_pagespeed_analysis
         }
         
         # Cache the result for future use

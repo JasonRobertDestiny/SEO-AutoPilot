@@ -88,7 +88,36 @@ class SEOReportGenerator:
         }
     
     def _calculate_overall_score(self, analysis_data: Dict[str, Any]) -> float:
-        """Calculate overall SEO score from all analysis components."""
+        """🎯 UNIFIED SEO SCORE CALCULATION - Use same logic as API unified scoring system
+        
+        Priority order:
+        1. Backend unified seo_score (most accurate)
+        2. Professional diagnostics overall_score 
+        3. Basic weighted calculation (fallback)
+        
+        This ensures reports show the same score as frontend and strategy generators.
+        """
+        # 🥇 PRIORITY 1: Use Backend Unified Score if available
+        if 'seo_score' in analysis_data:
+            score_data = analysis_data['seo_score']
+            if isinstance(score_data, dict) and score_data.get('score') is not None:
+                score = float(score_data['score'])
+                print(f"📊 Report using unified backend score: {score:.1f} (source: {score_data.get('source', 'backend')})")
+                return round(score, 1)
+            elif isinstance(score_data, (int, float)) and score_data > 0:
+                score = float(score_data)
+                print(f"📊 Report using numeric backend score: {score:.1f}")
+                return round(score, 1)
+        
+        # 🥈 PRIORITY 2: Use Professional Diagnostics Score
+        professional_analysis = analysis_data.get('professional_analysis', {})
+        if professional_analysis and professional_analysis.get('overall_score') is not None:
+            score = float(professional_analysis['overall_score'])
+            print(f"📊 Report using professional diagnostics score: {score:.1f}")
+            return round(score, 1)
+        
+        # 🥉 PRIORITY 3: Fallback to basic calculation (legacy compatibility)
+        print("⚠️ Report falling back to basic calculation - consider using unified scoring")
         basic_analysis = analysis_data.get('basic_seo_analysis', {})
         
         scores = []
