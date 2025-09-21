@@ -6,10 +6,6 @@ Google Analytics and Search Console data for comprehensive SEO insights.
 """
 
 from dotenv import load_dotenv
-from langchain_anthropic import ChatAnthropic
-from langchain.prompts import PromptTemplate
-from langchain.schema.runnable import RunnablePassthrough
-from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any
 from .siliconflow_llm import SiliconFlowLLM
@@ -49,166 +45,21 @@ class PredictiveInsights(BaseModel):
 
 
 class EnhancedLLMSEOAnalyst:
-    """Enhanced LLM SEO Analyst with multi-data source integration."""
+    """Enhanced LLM SEO Analyst with multi-data source integration using SiliconFlow API."""
     
-    def __init__(self, model_name: str = "claude-3-sonnet-20240229", api_key: Optional[str] = None, use_siliconflow: bool = False, siliconflow_api_key: Optional[str] = None, siliconflow_model: Optional[str] = None):
-        """Initialize the enhanced analyst.
+    def __init__(self, siliconflow_api_key: Optional[str] = None, siliconflow_model: Optional[str] = None):
+        """Initialize the enhanced analyst with SiliconFlow API.
         
         Args:
-            model_name: Anthropic model name
-            api_key: Anthropic API key
-            use_siliconflow: Whether to use Silicon Flow API
             siliconflow_api_key: Silicon Flow API key
             siliconflow_model: Silicon Flow model to use (defaults to env var or Qwen/Qwen2.5-VL-72B-Instruct)
         """
-        self.use_siliconflow = use_siliconflow or bool(os.getenv("SILICONFLOW_API_KEY"))
+        # Get model from parameter, env var, or default
+        model = siliconflow_model or os.getenv("SILICONFLOW_MODEL", "Qwen/Qwen2.5-VL-72B-Instruct")
+        self.siliconflow_llm = SiliconFlowLLM(siliconflow_api_key, model)
         
-        if self.use_siliconflow:
-            # Get model from parameter, env var, or default
-            model = siliconflow_model or os.getenv("SILICONFLOW_MODEL", "Qwen/Qwen2.5-VL-72B-Instruct")
-            self.siliconflow_llm = SiliconFlowLLM(siliconflow_api_key, model)
-            self.llm = None
-        else:
-            self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
-            if not self.api_key:
-                raise ValueError("Anthropic API key is required. Set ANTHROPIC_API_KEY environment variable.")
-            
-            self.llm = ChatAnthropic(
-                model=model_name,
-                anthropic_api_key=self.api_key,
-                temperature=0.1,
-                max_tokens=4000
-            )
-            self.siliconflow_llm = None
-        
-        if not self.use_siliconflow:
-            self.setup_parsers()
-            self.setup_chains()
+        logger.info(f"🚀 Enhanced LLM SEO Analyst initialized with SiliconFlow model: {model}")
     
-    def setup_parsers(self):
-        """Setup output parsers for structured responses."""
-        self.insights_parser = PydanticOutputParser(pydantic_object=DataDrivenInsights)
-        self.trends_parser = PydanticOutputParser(pydantic_object=TrendAnalysis)
-        self.predictive_parser = PydanticOutputParser(pydantic_object=PredictiveInsights)
-    
-    def setup_chains(self):
-        """Setup analysis chains with enhanced prompts."""
-        
-        # Enhanced insights chain incorporating Google data
-        insights_prompt = PromptTemplate(
-            template="""
-            You are an expert SEO analyst with access to comprehensive website data.
-            Analyze the following combined data to provide strategic SEO insights:
-            
-            WEBSITE SEO ANALYSIS:
-            {seo_analysis}
-            
-            GOOGLE ANALYTICS DATA:
-            {analytics_data}
-            
-            SEARCH CONSOLE DATA:
-            {search_data}
-            
-            PAGE PERFORMANCE:
-            {page_performance}
-            
-            Based on this comprehensive data, provide:
-            1. Overall performance summary
-            2. Key opportunity areas for improvement
-            3. Strategic priorities
-            4. Quick wins (high impact, low effort)
-            5. Long-term strategic projects
-            
-            {format_instructions}
-            """,
-            input_variables=["seo_analysis", "analytics_data", "search_data", "page_performance"],
-            partial_variables={"format_instructions": self.insights_parser.get_format_instructions()}
-        )
-        
-        # Trend analysis chain
-        trends_prompt = PromptTemplate(
-            template="""
-            Analyze the following performance data to identify trends and patterns:
-            
-            CURRENT PERFORMANCE METRICS:
-            {performance_summary}
-            
-            HISTORICAL CONTEXT (if available):
-            {historical_data}
-            
-            PAGE-LEVEL INSIGHTS:
-            {page_insights}
-            
-            Provide analysis on:
-            1. Traffic trends and patterns
-            2. Search ranking changes
-            3. User behavior shifts
-            4. Content performance trends
-            5. Seasonal or cyclical patterns
-            
-            {format_instructions}
-            """,
-            input_variables=["performance_summary", "historical_data", "page_insights"],
-            partial_variables={"format_instructions": self.trends_parser.get_format_instructions()}
-        )
-        
-        # Predictive insights chain
-        predictive_prompt = PromptTemplate(
-            template="""
-            Based on the comprehensive analysis below, provide predictive insights and recommendations:
-            
-            CURRENT STATE:
-            {current_analysis}
-            
-            PERFORMANCE TRENDS:
-            {trend_analysis}
-            
-            COMPETITIVE CONTEXT:
-            {competitive_context}
-            
-            MARKET OPPORTUNITIES:
-            {market_opportunities}
-            
-            Provide predictions for:
-            1. Future growth opportunities
-            2. Potential risks and challenges
-            3. Growth trajectory predictions
-            4. Sustainable competitive advantages
-            
-            {format_instructions}
-            """,
-            input_variables=["current_analysis", "trend_analysis", "competitive_context", "market_opportunities"],
-            partial_variables={"format_instructions": self.predictive_parser.get_format_instructions()}
-        )
-        
-        self.insights_chain = (
-            {"seo_analysis": RunnablePassthrough(), 
-             "analytics_data": RunnablePassthrough(),
-             "search_data": RunnablePassthrough(),
-             "page_performance": RunnablePassthrough()}
-            | insights_prompt
-            | self.llm
-            | self.insights_parser
-        )
-        
-        self.trends_chain = (
-            {"performance_summary": RunnablePassthrough(),
-             "historical_data": RunnablePassthrough(),
-             "page_insights": RunnablePassthrough()}
-            | trends_prompt
-            | self.llm
-            | self.trends_parser
-        )
-        
-        self.predictive_chain = (
-            {"current_analysis": RunnablePassthrough(),
-             "trend_analysis": RunnablePassthrough(),
-             "competitive_context": RunnablePassthrough(),
-             "market_opportunities": RunnablePassthrough()}
-            | predictive_prompt
-            | self.llm
-            | self.predictive_parser
-        )
     
     async def analyze_comprehensive_data(
         self,
@@ -217,7 +68,7 @@ class EnhancedLLMSEOAnalyst:
         competitive_context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Perform comprehensive analysis combining all data sources.
+        Perform comprehensive analysis combining all data sources using SiliconFlow API.
         
         Args:
             seo_analysis: Traditional SEO analysis results
@@ -227,54 +78,133 @@ class EnhancedLLMSEOAnalyst:
         Returns:
             Comprehensive analysis results with strategic insights
         """
-        # Extract data from Google insights
-        analytics_summary = google_insights.get('analytics_summary', {})
-        search_summary = google_insights.get('search_summary', {})
-        page_performance = google_insights.get('page_performance', {})
-        recommendations = google_insights.get('recommendations', [])
+        import time
+        start_time = time.time()
+        logger.info("🎯 Starting Enhanced Comprehensive Analysis with SiliconFlow")
         
-        # Prepare data for analysis
-        seo_summary = self._prepare_seo_summary(seo_analysis)
-        analytics_str = self._format_analytics_data(analytics_summary)
-        search_str = self._format_search_data(search_summary)
-        performance_str = self._format_page_performance(page_performance)
-        
-        # Run parallel analysis chains
-        insights_task = self.insights_chain.ainvoke({
-            "seo_analysis": seo_summary,
-            "analytics_data": analytics_str,
-            "search_data": search_str,
-            "page_performance": performance_str
-        })
-        
-        trends_task = self.trends_chain.ainvoke({
-            "performance_summary": f"Analytics: {analytics_str}\nSearch: {search_str}",
-            "historical_data": "Historical comparison data not available in current implementation",
-            "page_insights": performance_str
-        })
-        
-        predictive_task = self.predictive_chain.ainvoke({
-            "current_analysis": f"SEO Analysis: {seo_summary}\nPerformance: {analytics_str}",
-            "trend_analysis": "Trend analysis will be completed based on current metrics",
-            "competitive_context": json.dumps(competitive_context or {}),
-            "market_opportunities": "Market opportunities based on current search performance"
-        })
-        
-        # Wait for all analyses to complete
-        insights, trends, predictive = await asyncio.gather(
-            insights_task, trends_task, predictive_task
-        )
-        
-        # Combine all results
-        comprehensive_analysis = {
-            "data_driven_insights": insights.dict(),
-            "trend_analysis": trends.dict(),
-            "predictive_insights": predictive.dict(),
-            "google_data_recommendations": recommendations,
-            "analysis_timestamp": str(asyncio.get_event_loop().time())
+        try:
+            # Extract data from Google insights
+            analytics_summary = google_insights.get('analytics_summary', {})
+            search_summary = google_insights.get('search_summary', {})
+            page_performance = google_insights.get('page_performance', {})
+            recommendations = google_insights.get('recommendations', [])
+            
+            # Prepare comprehensive context for analysis
+            comprehensive_context = {
+                'seo_analysis': seo_analysis,
+                'analytics_summary': analytics_summary,
+                'search_summary': search_summary,
+                'page_performance': page_performance,
+                'competitive_context': competitive_context or {},
+                'analysis_type': 'comprehensive_multi_source'
+            }
+            
+            # Use SiliconFlow for comprehensive analysis
+            logger.info("📡 Using SiliconFlow for multi-source comprehensive analysis")
+            result = await self.siliconflow_llm.analyze_seo_data(comprehensive_context, "comprehensive")
+            
+            # Structure the results for compatibility
+            comprehensive_analysis = {
+                "data_driven_insights": self._extract_insights(result),
+                "trend_analysis": self._extract_trends(result),
+                "predictive_insights": self._extract_predictions(result),
+                "google_data_recommendations": recommendations,
+                "analysis_timestamp": str(time.time()),
+                "siliconflow_metadata": {
+                    "model_used": self.siliconflow_llm.model,
+                    "provider": "siliconflow",
+                    "analysis_type": "comprehensive_multi_source"
+                }
+            }
+            
+            execution_time = time.time() - start_time
+            comprehensive_analysis["execution_metadata"] = {
+                "total_time": execution_time,
+                "status": "completed"
+            }
+            
+            logger.info(f"✅ Enhanced comprehensive analysis completed in {execution_time:.2f}s")
+            return comprehensive_analysis
+            
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error(f"💥 Enhanced comprehensive analysis failed after {execution_time:.2f}s: {e}")
+            
+            # Return fallback structure
+            return {
+                "data_driven_insights": self._get_fallback_insights(seo_analysis),
+                "trend_analysis": self._get_fallback_trends(),
+                "predictive_insights": self._get_fallback_predictions(),
+                "google_data_recommendations": google_insights.get('recommendations', []),
+                "analysis_timestamp": str(time.time()),
+                "error_metadata": {
+                    "error_message": str(e),
+                    "execution_time": execution_time,
+                    "status": "failed_with_fallback"
+                }
+            }
+    
+    def _extract_insights(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract data-driven insights from SiliconFlow result."""
+        insights = result.get('insights', {})
+        return {
+            "performance_summary": insights.get('performance_summary', 'Comprehensive SEO analysis completed'),
+            "opportunity_areas": insights.get('opportunity_areas', []),
+            "strategic_priorities": insights.get('strategic_priorities', []),
+            "quick_wins": insights.get('quick_wins', []),
+            "long_term_projects": insights.get('long_term_projects', [])
         }
+    
+    def _extract_trends(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract trend analysis from SiliconFlow result."""
+        trends = result.get('trends', {})
+        return {
+            "traffic_trends": trends.get('traffic_trends', 'Traffic trend analysis based on current data'),
+            "ranking_changes": trends.get('ranking_changes', 'Ranking analysis based on SEO metrics'),
+            "user_behavior_changes": trends.get('user_behavior_changes', 'User behavior insights from analytics'),
+            "content_performance": trends.get('content_performance', 'Content performance evaluation')
+        }
+    
+    def _extract_predictions(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract predictive insights from SiliconFlow result."""
+        predictions = result.get('predictions', {})
+        return {
+            "future_opportunities": predictions.get('future_opportunities', []),
+            "risk_areas": predictions.get('risk_areas', []),
+            "growth_predictions": predictions.get('growth_predictions', 'Growth projections based on current metrics'),
+            "competitive_advantages": predictions.get('competitive_advantages', [])
+        }
+    
+    def _get_fallback_insights(self, seo_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Provide fallback insights when analysis fails."""
+        pages_count = len(seo_analysis.get('pages', []))
+        keywords_count = len(seo_analysis.get('keywords', []))
         
-        return comprehensive_analysis
+        return {
+            "performance_summary": f"Basic SEO analysis: {pages_count} pages, {keywords_count} keywords analyzed",
+            "opportunity_areas": ["Review technical SEO issues", "Optimize content structure", "Improve keyword targeting"],
+            "strategic_priorities": ["Technical optimization", "Content improvement", "Performance enhancement"],
+            "quick_wins": ["Fix meta descriptions", "Optimize image alt texts", "Improve internal linking"],
+            "long_term_projects": ["Content strategy development", "Site architecture optimization", "Performance monitoring setup"]
+        }
+    
+    def _get_fallback_trends(self) -> Dict[str, Any]:
+        """Provide fallback trend analysis."""
+        return {
+            "traffic_trends": "Trend analysis requires historical data - monitor performance over time",
+            "ranking_changes": "Ranking trends need baseline data - establish tracking system",
+            "user_behavior_changes": "User behavior analysis pending analytics integration",
+            "content_performance": "Content performance evaluation based on SEO metrics"
+        }
+    
+    def _get_fallback_predictions(self) -> Dict[str, Any]:
+        """Provide fallback predictive insights."""
+        return {
+            "future_opportunities": ["Expand keyword targeting", "Improve technical performance", "Enhance content quality"],
+            "risk_areas": ["Monitor competitor activity", "Track search algorithm changes", "Maintain technical health"],
+            "growth_predictions": "Growth potential depends on consistent optimization efforts",
+            "competitive_advantages": ["Focus on unique value proposition", "Optimize for user experience", "Build authority signals"]
+        }
     
     def _prepare_seo_summary(self, seo_analysis: Dict[str, Any]) -> str:
         """Prepare SEO analysis summary for LLM processing."""
@@ -403,7 +333,7 @@ class EnhancedLLMSEOAnalyst:
 
 # Example usage
 async def main():
-    """Example of using the enhanced LLM analyst."""
+    """Example of using the enhanced LLM analyst with SiliconFlow."""
     analyst = EnhancedLLMSEOAnalyst()
     
     # Sample data (in real usage, this would come from actual analysis)

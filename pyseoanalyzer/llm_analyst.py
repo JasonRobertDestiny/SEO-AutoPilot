@@ -1,8 +1,4 @@
 from dotenv import load_dotenv
-from langchain_anthropic import ChatAnthropic
-from langchain.prompts import PromptTemplate
-from langchain.schema.runnable import RunnablePassthrough
-from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any
 
@@ -122,555 +118,55 @@ class SEORecommendations(BaseModel):
 
 
 class LLMSEOEnhancer:
-    """Enhanced SEO analyzer using Claude or Silicon Flow for intelligent insights."""
+    """
+    Enhanced SEO analysis using Silicon Flow LLM.
     
-    def __init__(self, api_key: Optional[str] = None, use_siliconflow: bool = False, siliconflow_api_key: Optional[str] = None, siliconflow_model: Optional[str] = None):
+    This class provides AI-powered SEO insights focusing on:
+    1. Entity optimization
+    2. N-E-E-A-T-T credibility signals  
+    3. Conversational search readiness
+    4. Cross-platform presence optimization
+    5. Professional diagnostic integration
+    """
+
+    def __init__(self, siliconflow_api_key: str = None, siliconflow_model: str = None):
         """
-        Initialize the LLM SEO enhancer.
+        Initialize LLM SEO Enhancer with Silicon Flow provider.
         
         Args:
-            api_key: Anthropic API key (defaults to ANTHROPIC_API_KEY env var)
-            use_siliconflow: Whether to use Silicon Flow API instead of Anthropic
             siliconflow_api_key: Silicon Flow API key (defaults to SILICONFLOW_API_KEY env var)
             siliconflow_model: Silicon Flow model to use (defaults to SILICONFLOW_MODEL env var or Qwen/Qwen2.5-VL-72B-Instruct)
         """
-        self.use_siliconflow = use_siliconflow or bool(os.getenv("SILICONFLOW_API_KEY"))
+        # Get model from parameter, env var, or default
+        model = siliconflow_model or os.getenv("SILICONFLOW_MODEL", "Qwen/Qwen2.5-VL-72B-Instruct")
+        self.siliconflow_llm = SiliconFlowLLM(siliconflow_api_key, model)
         
-        if self.use_siliconflow:
-            # Get model from parameter, env var, or default
-            model = siliconflow_model or os.getenv("SILICONFLOW_MODEL", "Qwen/Qwen2.5-VL-72B-Instruct")
-            self.siliconflow_llm = SiliconFlowLLM(siliconflow_api_key, model)
-            self.llm = None
-        else:
-            self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
-            if not self.api_key:
-                raise ValueError("Anthropic API key is required. Set ANTHROPIC_API_KEY environment variable.")
-            
-            self.llm = ChatAnthropic(
-                model="claude-3-sonnet-20240229",
-                anthropic_api_key=self.api_key,
-                temperature=0,
-                timeout=30,
-                max_retries=3,
-            )
-            self.siliconflow_llm = None
-        
-        if not self.use_siliconflow:
-            self._setup_chains()
-
-    def _setup_chains(self):
-        """Setup modern LangChain runnable sequences using pipe syntax"""
-        # Entity Analysis Chain
-        entity_parser = PydanticOutputParser(pydantic_object=EntityAnalysis)
-
-        entity_prompt = PromptTemplate.from_template(
-            """Analyze these SEO elements for entity optimization:
-            1. Entity understanding (Knowledge Panel readiness)
-            2. Brand credibility signals (N-E-E-A-T-T principles)
-            3. Entity relationships and mentions
-            4. Topic entity connections
-            5. Schema markup effectiveness
-            
-            Data to analyze:
-            {seo_data}
-            
-            {format_instructions}
-
-            Only return your ouput in JSON format. Do not include any explanations any other text.
-            """
-        )
-
-        self.entity_chain = (
-            {
-                "seo_data": RunnablePassthrough(),
-                "format_instructions": lambda _: entity_parser.get_format_instructions(),
-            }
-            | entity_prompt
-            | self.llm
-            | entity_parser
-        )
-
-        # Credibility Analysis Chain
-        credibility_parser = PydanticOutputParser(pydantic_object=CredibilityAnalysis)
-
-        credibility_prompt = PromptTemplate.from_template(
-            """Evaluate these credibility aspects:
-            1. N-E-E-A-T-T signals
-            2. Entity understanding and validation
-            3. Content creator credentials
-            4. Publisher authority
-            5. Topic expertise signals
-            
-            Data to analyze:
-            {seo_data}
-            
-            {format_instructions}
-
-            Only return your ouput in JSON format. Do not include any explanations any other text.
-            """
-        )
-
-        self.credibility_chain = (
-            {
-                "seo_data": RunnablePassthrough(),
-                "format_instructions": lambda _: credibility_parser.get_format_instructions(),
-            }
-            | credibility_prompt
-            | self.llm
-            | credibility_parser
-        )
-
-        # Conversation Analysis Chain
-        conversation_parser = PydanticOutputParser(pydantic_object=ConversationAnalysis)
-
-        conversation_prompt = PromptTemplate.from_template(
-            """Analyze content for conversational search readiness:
-            1. Query pattern matching
-            2. Intent coverage across funnel
-            3. Natural language understanding
-            4. Follow-up content availability
-            5. Conversational triggers
-            
-            Data to analyze:
-            {seo_data}
-            
-            {format_instructions}
-
-            Only return your ouput in JSON format. Do not include any explanations any other text.
-            """
-        )
-
-        self.conversation_chain = (
-            {
-                "seo_data": RunnablePassthrough(),
-                "format_instructions": lambda _: conversation_parser.get_format_instructions(),
-            }
-            | conversation_prompt
-            | self.llm
-            | conversation_parser
-        )
-
-        # Platform Presence Chain
-        platform_parser = PydanticOutputParser(pydantic_object=PlatformPresence)
-
-        platform_prompt = PromptTemplate.from_template(
-            """Analyze presence across different platforms:
-            1. Search engines (Google, Bing)
-            2. Knowledge graphs
-            3. AI platforms (ChatGPT, Bard)
-            4. Social platforms
-            5. Industry-specific platforms
-            
-            Data to analyze:
-            {seo_data}
-            
-            {format_instructions}
-
-            Only return your ouput in JSON format. Do not include any explanations any other text.
-            """
-        )
-
-        self.platform_chain = (
-            {
-                "seo_data": RunnablePassthrough(),
-                "format_instructions": lambda _: platform_parser.get_format_instructions(),
-            }
-            | platform_prompt
-            | self.llm
-            | platform_parser
-        )
-
-        # Trends Analysis Chain
-        trends_parser = PydanticOutputParser(pydantic_object=TrendsAnalysis)
-
-        trends_prompt = PromptTemplate.from_template(
-            """Analyze trends data for strategic SEO opportunities:
-            1. Trending keyword opportunities and search volume patterns
-            2. Seasonal content strategy based on trend patterns
-            3. Search intent alignment and coverage analysis
-            4. Content gap identification using trend insights
-            5. Competitive keyword positioning and opportunities
-            6. Rising topic identification and strategic recommendations
-            7. Trend momentum assessment for content planning
-            
-            Trends and Keywords Data:
-            {trends_data}
-            
-            Basic SEO Data Context:
-            {seo_data}
-            
-            {format_instructions}
-
-            Only return your ouput in JSON format. Do not include any explanations any other text.
-            """
-        )
-
-        self.trends_chain = (
-            {
-                "trends_data": lambda x: x.get("trends_insights", {}),
-                "seo_data": lambda x: x.get("basic_seo", {}),
-                "format_instructions": lambda _: trends_parser.get_format_instructions(),
-            }
-            | trends_prompt
-            | self.llm
-            | trends_parser
-        )
-
-        # Performance Analysis Chain  
-        performance_parser = PydanticOutputParser(pydantic_object=PerformanceAnalysis)
-
-        performance_prompt = PromptTemplate.from_template(
-            """Analyze PageSpeed performance data for SEO optimization strategy:
-            1. Core Web Vitals impact on SEO rankings and user experience
-            2. Performance metrics analysis and SEO implications
-            3. Mobile-first optimization priorities and strategies
-            4. User experience insights affecting search performance
-            5. Technical performance optimization roadmap
-            6. PageSpeed impact scoring for SEO prioritization
-            7. Lighthouse-based optimization recommendations
-            
-            PageSpeed Performance Data:
-            {pagespeed_data}
-            
-            Basic SEO Data Context:
-            {seo_data}
-            
-            {format_instructions}
-
-            Only return your ouput in JSON format. Do not include any explanations any other text.
-            """
-        )
-
-        self.performance_chain = (
-            {
-                "pagespeed_data": lambda x: x.get("pagespeed_insights", {}),
-                "seo_data": lambda x: x.get("basic_seo", {}),
-                "format_instructions": lambda _: performance_parser.get_format_instructions(),
-            }
-            | performance_prompt
-            | self.llm
-            | performance_parser
-        )
-
-        # 🎯 PROFESSIONAL DIAGNOSTIC-AI INTEGRATION CHAIN
-        enhanced_professional_parser = PydanticOutputParser(pydantic_object=EnhancedProfessionalSEOAnalysis)
-
-        enhanced_professional_prompt = PromptTemplate.from_template(
-            """You are a senior SEO consultant with expertise equivalent to Ahrefs, SEMrush, and Screaming Frog tools.
-
-            Analyze the comprehensive diagnostic data below and provide professional-grade recommendations:
-
-            🔬 DIAGNOSTIC DATA (150+ Checkpoints):
-            Professional Analysis Score: {professional_score}/100
-            Category Scores: {category_scores}
-            Critical Issues: {critical_issues}
-            All Issues: {all_issues}
-
-            📊 PERFORMANCE DATA:
-            {performance_data}
-
-            📈 TRENDS & KEYWORDS:
-            {trends_data}
-
-            🌐 BASIC SEO DATA:
-            {basic_seo_data}
-
-            ANALYSIS REQUIREMENTS:
-            1. Synthesize ALL diagnostic data into actionable strategic insights
-            2. Provide professional-grade prioritization like enterprise SEO tools
-            3. Include specific technical fixes with implementation details
-            4. Calculate ROI projections for each optimization category
-            5. Create phased implementation timeline with milestones
-            6. Benchmark against industry standards and competitors
-            7. Identify risks and provide mitigation strategies
-
-            {format_instructions}
-
-            Provide analysis that matches or exceeds the quality of:
-            - Ahrefs Site Audit recommendations
-            - SEMrush Technical SEO audit
-            - Screaming Frog crawl analysis insights
-            - DeepCrawl enterprise reports
-
-            Only return your output in JSON format. Do not include any explanations or other text.
-            """)
-
-        self.enhanced_professional_chain = (
-            {
-                "professional_score": lambda x: x.get("professional_analysis", {}).get("overall_score", 0),
-                "category_scores": lambda x: json.dumps(x.get("professional_analysis", {}).get("category_scores", {}), indent=2),
-                "critical_issues": lambda x: json.dumps([issue for issue in x.get("professional_analysis", {}).get("all_issues", []) if issue.get("priority") == "critical"][:10], indent=2),
-                "all_issues": lambda x: json.dumps(x.get("professional_analysis", {}).get("all_issues", [])[:20], indent=2),
-                "performance_data": lambda x: json.dumps(x.get("pagespeed_insights", {}), indent=2),
-                "trends_data": lambda x: json.dumps(x.get("trends_insights", {}), indent=2),
-                "basic_seo_data": lambda x: json.dumps({
-                    "title": x.get("pages", [{}])[0].get("title", ""),
-                    "description": x.get("pages", [{}])[0].get("description", ""),
-                    "word_count": x.get("pages", [{}])[0].get("word_count", 0),
-                    "headings": x.get("pages", [{}])[0].get("headings", {}),
-                    "url": x.get("pages", [{}])[0].get("url", "")
-                }, indent=2),
-                "format_instructions": lambda _: enhanced_professional_parser.get_format_instructions(),
-            }
-            | enhanced_professional_prompt
-            | self.llm
-            | enhanced_professional_parser
-        )
-
-        # Recommendations Chain
-        recommendations_parser = PydanticOutputParser(
-            pydantic_object=SEORecommendations
-        )
-
-        recommendations_prompt = PromptTemplate.from_template(
-            """Based on this complete analysis, provide strategic recommendations:
-            1. Entity optimization strategy
-            2. Content strategy across platforms
-            3. Credibility building actions
-            4. Conversational optimization
-            5. Cross-platform presence improvement
-            
-            Analysis results:
-            {analysis_results}
-            
-            {format_instructions}
-
-            Only return your ouput in JSON format. Do not include any explanations any other text.
-            """
-        )
-
-        self.recommendations_chain = (
-            {
-                "analysis_results": RunnablePassthrough(),
-                "format_instructions": lambda _: recommendations_parser.get_format_instructions(),
-            }
-            | recommendations_prompt
-            | self.llm
-            | recommendations_parser
-        )
+        logger.info(f"🚀 LLM SEO Enhancer initialized with Silicon Flow model: {model}")
 
     async def enhance_seo_analysis(self, seo_data: Dict) -> Dict:
         """
-        Enhanced SEO analysis using modern LangChain patterns with timing and progress tracking
+        Enhanced SEO analysis using Silicon Flow API with timing and progress tracking
         """
         import time
         start_time = time.time()
-        logger.info("🚀 Starting LLM SEO analysis...")
+        logger.info("🚀 Starting LLM SEO analysis with SiliconFlow...")
         
         try:
-            if self.use_siliconflow:
-                # Use Silicon Flow API for analysis
-                logger.info("📡 Using SiliconFlow API for comprehensive analysis")
-                analysis_start = time.time()
-                result = await self.siliconflow_llm.analyze_seo_data(seo_data, "comprehensive")
-                analysis_time = time.time() - analysis_start
-                logger.info(f"✅ SiliconFlow analysis completed in {analysis_time:.2f}s")
-                return result
-            else:
-                # Use Anthropic Claude for analysis with detailed timing
-                logger.info("🤖 Using Anthropic Claude for detailed analysis")
-                
-                # Convert seo_data to string for prompt insertion
-                seo_data_str = json.dumps(seo_data, indent=2)
-                logger.info(f"📊 Prepared {len(seo_data_str)} chars of SEO data for analysis")
-
-                # Run analysis chains in parallel with timing
-                logger.info("⚡ Running up to 6 parallel analysis chains (including trends & performance)...")
-                parallel_start = time.time()
-                
-                # Check if we have trends and performance data available
-                has_trends = bool(seo_data.get("trends_insights"))
-                has_performance = bool(seo_data.get("pagespeed_insights"))
-                
-                try:
-                    # Base chains that always run
-                    base_chains = [
-                        self.entity_chain.ainvoke(seo_data_str),
-                        self.credibility_chain.ainvoke(seo_data_str),
-                        self.conversation_chain.ainvoke(seo_data_str),
-                        self.platform_chain.ainvoke(seo_data_str),
-                    ]
-                    
-                    # Add trends chain if data is available
-                    if has_trends:
-                        base_chains.append(self.trends_chain.ainvoke(seo_data))
-                        logger.info("📈 Including trends analysis chain")
-                    
-                    # Add performance chain if data is available
-                    if has_performance:
-                        base_chains.append(self.performance_chain.ainvoke(seo_data))
-                        logger.info("🚀 Including performance analysis chain")
-                    
-                    # Execute all available chains
-                    results = await asyncio.wait_for(
-                        asyncio.gather(*base_chains, return_exceptions=True),
-                        timeout=120.0  # Extended timeout for additional chains
-                    )
-                    
-                    # Unpack results based on what chains were run
-                    entity_results = results[0]
-                    credibility_results = results[1]
-                    conversation_results = results[2]
-                    platform_results = results[3]
-                    
-                    trends_results = None
-                    performance_results = None
-                    
-                    result_index = 4
-                    if has_trends:
-                        trends_results = results[result_index]
-                        result_index += 1
-                    if has_performance:
-                        performance_results = results[result_index]
-                    parallel_time = time.time() - parallel_start
-                    logger.info(f"✅ Parallel analysis completed in {parallel_time:.2f}s")
-                    
-                    # Check for exceptions in results
-                    analysis_names = ["entity", "credibility", "conversation", "platform"]
-                    result_objects = [entity_results, credibility_results, conversation_results, platform_results]
-                    
-                    if has_trends:
-                        analysis_names.append("trends")
-                        result_objects.append(trends_results)
-                    if has_performance:
-                        analysis_names.append("performance")
-                        result_objects.append(performance_results)
-                    
-                    failed_analyses = []
-                    for i, result in enumerate(result_objects):
-                        if isinstance(result, Exception):
-                            failed_analyses.append(analysis_names[i])
-                            logger.warning(f"❌ {analysis_names[i]} analysis failed: {result}")
-                    
-                    if failed_analyses:
-                        logger.warning(f"⚠️ {len(failed_analyses)} analysis chains failed: {failed_analyses}")
-                    
-                    # Use successful results only
-                    if not isinstance(entity_results, Exception):
-                        entity_dict = entity_results.model_dump()
-                    else:
-                        entity_dict = {"entity_assessment": "Analysis failed", "knowledge_panel_readiness": 0, "key_improvements": []}
-                        
-                    if not isinstance(credibility_results, Exception):
-                        credibility_dict = credibility_results.model_dump()
-                    else:
-                        credibility_dict = {"credibility_assessment": "Analysis failed", "neeat_scores": {}, "trust_signals": []}
-                        
-                    if not isinstance(conversation_results, Exception):
-                        conversation_dict = conversation_results.model_dump()
-                    else:
-                        conversation_dict = {"conversation_readiness": "Analysis failed", "query_patterns": [], "engagement_score": 0, "gaps": []}
-                        
-                    if not isinstance(platform_results, Exception):
-                        platform_dict = platform_results.model_dump()
-                    else:
-                        platform_dict = {"platform_coverage": {}, "visibility_scores": {}, "optimization_opportunities": []}
-                    
-                    # Handle trends results
-                    if has_trends and not isinstance(trends_results, Exception):
-                        trends_dict = trends_results.model_dump()
-                        logger.info("📈 Trends analysis completed successfully")
-                    else:
-                        trends_dict = {
-                            "trending_opportunities": [],
-                            "seasonal_strategy": "Trends data not available" if not has_trends else "Trends analysis failed",
-                            "search_intent_alignment": "No trends analysis",
-                            "content_gap_analysis": [],
-                            "competitive_keyword_strategy": "No trends data" if not has_trends else "Analysis failed",
-                            "trend_momentum_score": 0,
-                            "rising_topic_recommendations": []
-                        }
-                        if has_trends:
-                            logger.warning("📈 Trends analysis failed")
-                    
-                    # Handle performance results
-                    if has_performance and not isinstance(performance_results, Exception):
-                        performance_dict = performance_results.model_dump()
-                        logger.info("🚀 Performance analysis completed successfully")
-                    else:
-                        performance_dict = {
-                            "core_web_vitals_strategy": "PageSpeed data not available" if not has_performance else "Performance analysis failed",
-                            "performance_impact_assessment": "No performance analysis",
-                            "mobile_first_recommendations": [],
-                            "user_experience_insights": "No performance data" if not has_performance else "Analysis failed",
-                            "technical_performance_priorities": [],
-                            "page_speed_seo_score": 0,
-                            "lighthouse_optimization_roadmap": {}
-                        }
-                        if has_performance:
-                            logger.warning("🚀 Performance analysis failed")
-
-                except asyncio.TimeoutError:
-                    logger.error("⏰ LLM analysis timed out after 90 seconds")
-                    # Return basic fallback analysis
-                    return {
-                        **seo_data,
-                        "llm_analysis": {
-                            "status": "timeout",
-                            "message": "Analysis timed out - server may be under heavy load",
-                            "execution_time": time.time() - start_time,
-                            "recommendations": ["Try again later when server load is lower"]
-                        }
-                    }
-
-                # Combine analyses
-                logger.info("🔄 Combining analysis results...")
-                combined_analysis = {
-                    "entity_analysis": entity_dict,
-                    "credibility_analysis": credibility_dict,
-                    "conversation_analysis": conversation_dict,
-                    "cross_platform_presence": platform_dict,
-                }
-
-                # Generate final recommendations with timeout
-                logger.info("💡 Generating final recommendations...")
-                recommendations_start = time.time()
-                try:
-                    recommendations = await asyncio.wait_for(
-                        self.recommendations_chain.ainvoke(
-                            json.dumps(combined_analysis, indent=2)
-                        ),
-                        timeout=30.0  # 30 second timeout for recommendations
-                    )
-                    recommendations_time = time.time() - recommendations_start
-                    logger.info(f"✅ Recommendations generated in {recommendations_time:.2f}s")
-                    recommendations_dict = recommendations.model_dump()
-                except asyncio.TimeoutError:
-                    logger.warning("⏰ Recommendations generation timed out")
-                    recommendations_dict = {
-                        "strategic_recommendations": ["Analysis completed but recommendations timed out"],
-                        "priority_actions": ["Review basic SEO fundamentals"],
-                        "expected_impact": "medium"
-                    }
-                except Exception as e:
-                    logger.error(f"❌ Recommendations generation failed: {e}")
-                    recommendations_dict = {
-                        "strategic_recommendations": ["Basic SEO analysis completed"],
-                        "priority_actions": ["Review SEO fundamentals"],
-                        "expected_impact": "medium"
-                    }
-
-                # Combine all results
-                final_results = {
-                    **seo_data,
-                    **combined_analysis,
-                    "recommendations": recommendations_dict,
-                }
-
-                total_time = time.time() - start_time
-                logger.info(f"🎉 Complete LLM analysis finished in {total_time:.2f}s")
-                
-                # Add timing metadata
-                final_results["llm_analysis_metadata"] = {
-                    "total_execution_time": total_time,
-                    "parallel_analysis_time": parallel_time if 'parallel_time' in locals() else 0,
-                    "recommendations_time": recommendations_time if 'recommendations_time' in locals() else 0,
-                    "provider": "anthropic_claude",
-                    "failed_analyses": failed_analyses if 'failed_analyses' in locals() else [],
-                    "status": "completed"
-                }
-
-                return self._format_output(final_results)
+            # Use Silicon Flow API for comprehensive analysis
+            logger.info("📡 Using SiliconFlow API for comprehensive analysis")
+            analysis_start = time.time()
+            result = await self.siliconflow_llm.analyze_seo_data(seo_data, "comprehensive")
+            analysis_time = time.time() - analysis_start
+            logger.info(f"✅ SiliconFlow analysis completed in {analysis_time:.2f}s")
+            
+            # Add timing metadata
+            result["llm_analysis_metadata"] = {
+                "total_execution_time": analysis_time,
+                "provider": "siliconflow",
+                "status": "completed"
+            }
+            
+            return result
                 
         except Exception as e:
             total_time = time.time() - start_time
@@ -682,36 +178,29 @@ class LLMSEOEnhancer:
                     "status": "error",
                     "error_message": str(e),
                     "execution_time": total_time,
-                    "recommendations": ["Unable to complete LLM analysis - check API keys and network connectivity"]
+                    "recommendations": ["Unable to complete LLM analysis - check SiliconFlow API key and network connectivity"]
                 }
             }
 
     def _format_output(self, raw_analysis: Dict) -> Dict:
         """Format analysis results into a clean, structured output"""
+        # Provide fallback values for expected structure
+        entity_analysis = raw_analysis.get("entity_analysis", {})
+        credibility_analysis = raw_analysis.get("credibility_analysis", {})
+        conversation_analysis = raw_analysis.get("conversation_analysis", {})
+        platform_analysis = raw_analysis.get("cross_platform_presence", {})
+        recommendations = raw_analysis.get("recommendations", {})
+        
         return {
             "summary": {
-                "entity_score": raw_analysis["entity_analysis"][
-                    "knowledge_panel_readiness"
-                ],
-                "credibility_score": sum(
-                    raw_analysis["credibility_analysis"]["neeat_scores"].values()
-                )
-                / 6,
-                "conversation_score": raw_analysis["conversation_analysis"][
-                    "engagement_score"
-                ],
-                "platform_score": sum(
-                    raw_analysis["cross_platform_presence"][
-                        "visibility_scores"
-                    ].values()
-                )
-                / len(raw_analysis["cross_platform_presence"]["visibility_scores"]),
+                "entity_score": entity_analysis.get("knowledge_panel_readiness", 0),
+                "credibility_score": sum(credibility_analysis.get("neeat_scores", {}).values()) / max(len(credibility_analysis.get("neeat_scores", {})), 1),
+                "conversation_score": conversation_analysis.get("engagement_score", 0),
+                "platform_score": sum(platform_analysis.get("visibility_scores", {}).values()) / max(len(platform_analysis.get("visibility_scores", {})), 1),
             },
             "detailed_analysis": raw_analysis,
-            "quick_wins": raw_analysis["recommendations"]["quick_wins"],
-            "strategic_recommendations": raw_analysis["recommendations"][
-                "strategic_recommendations"
-            ],
+            "quick_wins": recommendations.get("quick_wins", []),
+            "strategic_recommendations": recommendations.get("strategic_recommendations", []),
         }
 
     async def enhanced_professional_analysis(self, enhanced_context: Dict) -> Dict:
@@ -740,81 +229,31 @@ class LLMSEOEnhancer:
         logger.info("🎯 Starting Enhanced Professional Analysis with Diagnostic Integration")
         
         try:
-            if self.use_siliconflow:
-                # Use Silicon Flow for professional analysis
-                logger.info("📡 Using SiliconFlow for professional diagnostic integration")
-                result = await self.siliconflow_llm.analyze_seo_data(enhanced_context, "professional")
-                
-                # Enhance with diagnostic metadata
-                if 'professional_analysis' in enhanced_context:
-                    prof_data = enhanced_context['professional_analysis']
-                    result['diagnostic_metadata'] = {
-                        'total_checkpoints': len(prof_data.get('all_issues', [])),
-                        'overall_score': prof_data.get('overall_score', 0),
-                        'critical_issues': len([i for i in prof_data.get('all_issues', []) if i.get('priority') == 'critical']),
-                        'analysis_source': 'siliconflow_professional'
-                    }
-                
-                return result
-                
-            else:
-                # Use Anthropic Claude with enhanced professional chain
-                logger.info("🤖 Using Anthropic Claude for enhanced professional analysis")
-                
-                # Run the enhanced professional chain if available
-                if hasattr(self, 'enhanced_professional_chain'):
-                    try:
-                        logger.info("⚡ Running enhanced professional analysis chain")
-                        professional_result = await asyncio.wait_for(
-                            self.enhanced_professional_chain.ainvoke(enhanced_context),
-                            timeout=60.0  # 60 second timeout for professional analysis
-                        )
-                        
-                        # Convert to dictionary and add metadata
-                        result = professional_result.model_dump()
-                        
-                        # Add diagnostic integration metadata
-                        if 'professional_analysis' in enhanced_context:
-                            prof_data = enhanced_context['professional_analysis']
-                            result['diagnostic_metadata'] = {
-                                'total_checkpoints': len(prof_data.get('all_issues', [])),
-                                'overall_score': prof_data.get('overall_score', 0),
-                                'critical_issues': len([i for i in prof_data.get('all_issues', []) if i.get('priority') == 'critical']),
-                                'category_scores': prof_data.get('category_scores', {}),
-                                'analysis_source': 'anthropic_professional'
-                            }
-                        
-                        # Add execution timing
-                        execution_time = time.time() - start_time
-                        result['professional_analysis_metadata'] = {
-                            'execution_time': execution_time,
-                            'provider': 'anthropic_claude',
-                            'status': 'completed',
-                            'analysis_depth': 'professional_grade'
-                        }
-                        
-                        logger.info(f"✅ Enhanced professional analysis completed in {execution_time:.2f}s")
-                        return result
-                        
-                    except asyncio.TimeoutError:
-                        logger.warning("⏰ Enhanced professional analysis timed out, falling back to regular analysis")
-                    except Exception as e:
-                        logger.error(f"❌ Enhanced professional analysis failed: {e}")
-                
-                # Fallback to enhanced regular analysis with professional context
-                logger.info("🔄 Falling back to enhanced regular analysis with professional context")
-                result = await self.enhance_seo_analysis(enhanced_context.get('basic_content', enhanced_context))
-                
-                # Add professional context indicators
-                if 'professional_analysis' in enhanced_context:
-                    prof_data = enhanced_context['professional_analysis']
-                    result['professional_context'] = {
-                        'diagnostic_score': prof_data.get('overall_score', 0),
-                        'total_issues': len(prof_data.get('all_issues', [])),
-                        'analysis_method': 'enhanced_regular_with_professional_context'
-                    }
-                
-                return result
+            # Use Silicon Flow for professional analysis
+            logger.info("📡 Using SiliconFlow for professional diagnostic integration")
+            result = await self.siliconflow_llm.analyze_seo_data(enhanced_context, "professional")
+            
+            # Enhance with diagnostic metadata
+            if 'professional_analysis' in enhanced_context:
+                prof_data = enhanced_context['professional_analysis']
+                result['diagnostic_metadata'] = {
+                    'total_checkpoints': len(prof_data.get('all_issues', [])),
+                    'overall_score': prof_data.get('overall_score', 0),
+                    'critical_issues': len([i for i in prof_data.get('all_issues', []) if i.get('priority') == 'critical']),
+                    'analysis_source': 'siliconflow_professional'
+                }
+            
+            # Add execution timing
+            execution_time = time.time() - start_time
+            result['professional_analysis_metadata'] = {
+                'execution_time': execution_time,
+                'provider': 'siliconflow',
+                'status': 'completed',
+                'analysis_depth': 'professional_grade'
+            }
+            
+            logger.info(f"✅ Enhanced professional analysis completed in {execution_time:.2f}s")
+            return result
                 
         except Exception as e:
             execution_time = time.time() - start_time
@@ -836,16 +275,16 @@ class LLMSEOEnhancer:
                     'error_message': str(e),
                     'fallback_error': str(fallback_error),
                     'execution_time': execution_time,
-                    'recommendations': ['Professional analysis unavailable - please check API keys and network connectivity']
+                    'recommendations': ['Professional analysis unavailable - please check SiliconFlow API key and network connectivity']
                 }
 
 
 # Example usage with async support
 async def enhanced_modern_analyze(
-    site: str, sitemap: Optional[str] = None, api_key: str = None, **kwargs
+    site: str, sitemap: Optional[str] = None, siliconflow_api_key: str = None, **kwargs
 ):
     """
-    Enhanced analysis incorporating modern SEO principles using LangChain
+    Enhanced analysis incorporating modern SEO principles using SiliconFlow
     """
     from pyseoanalyzer import analyze
 
@@ -853,8 +292,8 @@ async def enhanced_modern_analyze(
     original_results = analyze(site, sitemap, **kwargs)
 
     # Enhance with modern SEO analysis if API key provided
-    if api_key:
-        enhancer = LLMSEOEnhancer()
+    if siliconflow_api_key or os.getenv("SILICONFLOW_API_KEY"):
+        enhancer = LLMSEOEnhancer(siliconflow_api_key)
         enhanced_results = await enhancer.enhance_seo_analysis(original_results)
         return enhancer._format_output(enhanced_results)
 

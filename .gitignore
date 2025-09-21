@@ -1,62 +1,149 @@
-# I don't want the python virtual env in github!
-venv
-env
+# Python Virtual Environments
+venv/
+env/
 .env
+.venv/
+ENV/
+env.bak/
+venv.bak/
 
-# nor visual
-.vscode
+# IDE and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
+# Python Cache and Compiled Files
 *.py[cod]
-
-# C extensions
+*$py.class
+__pycache__/
 *.so
-*/__pychache__/*
 
-# Packages
+# Package and Distribution Files
 *.egg
-*.egg-info
-dist
-build
-eggs
-parts
-bin
-var
-sdist
-develop-eggs
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+bin/
+var/
+sdist/
+develop-eggs/
 .installed.cfg
-lib
-lib64
+lib/
+lib64/
+*.manifest
+*.spec
 
 # Installer logs
 pip-log.txt
+pip-delete-this-directory.txt
 
 # Unit test / coverage reports
 .coverage
-.tox
+.tox/
+.nox/
 nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+htmlcov/
 
 # Translations
 *.mo
+*.pot
 
-# Mr Developer
-.mr.developer.cfg
-.project
-.pydevproject
+# Django and Flask
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
 
-# Output directory
-output/
-build/
+# Jupyter Notebook
+*.ipynb
+.ipynb_checkpoints/
 
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# System Files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# SEO Analyzer Specific
+output/
+test_*.html
+test_*.xml
+test_*.json
+test_*.csv
+test_*.txt
+*.tmp
+*.bak
+
+# Cache Files (keep valid cache, exclude test cache)
+.seo_cache/test_*
+.seo_cache/full_analysis
 
 # Files not to commit
 keyword_api.markdown
 roadmap.markdown
 
-# ipython
-*.ipynb
-.ipynb_checkpoints/*
-
-
-# PyCharm
-.idea/*
+# Temporary files and directories
+tmp/
+temp/
+*.log
