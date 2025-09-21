@@ -391,6 +391,16 @@ class SEOAgent {
             this.updateAllSections(analysisData);
             this.generateTodos(analysisData);
             
+            // 🎯 CHART INTEGRATION: Update charts after analysis completes
+            if (window.seoChartManager) {
+                console.log('🎯 Triggering chart updates with analysis data');
+                setTimeout(() => {
+                    window.seoChartManager.updateChartsWithAnalysis(result);
+                }, 300); // Small delay to ensure DOM is ready
+            } else {
+                console.warn('⚠️ Chart manager not available');
+            }
+            
             // Show performance info if available
             if (result.performance) {
                 console.log(`✅ Analysis completed in ${result.performance.execution_time}s (optimized: ${result.performance.optimized})`);
@@ -471,6 +481,15 @@ class SEOAgent {
     }
 
     updateAllSections(data) {
+        console.log('🎯 DEBUG: UpdateAllSections called with data structure:', {
+            hasAnalysis: !!data.analysis,
+            hasPages: !!(data.analysis && data.analysis.pages),
+            pageCount: data.analysis?.pages?.length || 0,
+            firstPageKeys: data.analysis?.pages?.[0] ? Object.keys(data.analysis.pages[0]) : [],
+            sampleInternalLinks: data.analysis?.pages?.[0]?.internal_links?.slice(0, 2) || 'none',
+            sampleExternalLinks: data.analysis?.pages?.[0]?.external_links?.slice(0, 2) || 'none'
+        });
+        
         this.updateSiteInfo(data);
         this.updateSummarySection(data);
         this.updateSEOAnalysisSection(data);
@@ -514,25 +533,27 @@ class SEOAgent {
             console.log('Current Analysis Object:', this.currentAnalysis);
             console.log('Data Parameter:', data);
             
-            // PRIORITY 1: Professional Analysis Overall Score (Most Accurate)
-            const professionalScore = this.currentAnalysis?.analysis?.pages?.[0]?.professional_analysis?.overall_score;
-            if (professionalScore !== undefined && professionalScore !== null && !isNaN(professionalScore)) {
-                score = Math.round(professionalScore * 10) / 10; // Round to 1 decimal
-                scoreSource = 'professional_analysis';
-                console.log('✅ Using Professional Analysis Score:', score);
-            }
-            
-            // PRIORITY 2: Backend SEO Score (Detailed Calculation)
-            else if (this.currentAnalysis?.seo_score !== undefined) {
+            // PRIORITY 1: Backend Unified SEO Score (Most Accurate)
+            if (this.currentAnalysis?.seo_score !== undefined) {
                 const scoreData = this.currentAnalysis.seo_score;
-                if (typeof scoreData === 'object' && scoreData.score !== undefined) {
+                if (typeof scoreData === 'object' && scoreData.score !== undefined && scoreData.score !== null) {
                     score = Math.round(scoreData.score * 10) / 10;
-                    scoreSource = 'backend_detailed';
-                    console.log('✅ Using Backend Detailed Score:', score);
-                } else if (typeof scoreData === 'number') {
+                    scoreSource = scoreData.source || 'backend_unified';
+                    console.log('✅ Using Backend Unified Score:', score, 'Source:', scoreData.source);
+                } else if (typeof scoreData === 'number' && !isNaN(scoreData)) {
                     score = Math.round(scoreData * 10) / 10;
                     scoreSource = 'backend_number';
                     console.log('✅ Using Backend Number Score:', score);
+                }
+            }
+            
+            // PRIORITY 2: Professional Analysis Overall Score (Fallback)
+            else if (this.currentAnalysis?.analysis?.pages?.[0]?.professional_analysis?.overall_score !== undefined) {
+                const professionalScore = this.currentAnalysis.analysis.pages[0].professional_analysis.overall_score;
+                if (professionalScore !== null && !isNaN(professionalScore)) {
+                    score = Math.round(professionalScore * 10) / 10;
+                    scoreSource = 'professional_analysis';
+                    console.log('✅ Using Professional Analysis Score:', score);
                 }
             }
             
@@ -1203,15 +1224,41 @@ class SEOAgent {
         
         if (!table) return;
         
-        const internalLinks = this.extractInternalLinks(data) || [
-            { url: 'https://example.com/', anchor: 'Home' },
-            { url: 'https://example.com/about', anchor: 'About' },
-            { url: 'https://example.com/services', anchor: 'Services' },
-            { url: 'https://example.com/contact', anchor: 'Contact' }
-        ];
+        console.log('🔍 DEBUG: UpdateInternalLinks called with data:', data);
+        console.log('🔍 DEBUG: Current analysis object:', this.currentAnalysis);
+        
+        const internalLinks = this.extractInternalLinks(data);
+        
+        if (!internalLinks || internalLinks.length === 0) {
+            console.log('⚠️ DEBUG: No internal links found, using fallback data');
+            // Only use fallback if extraction completely fails
+            const fallbackLinks = [
+                { url: 'https://example.com/', anchor: 'Home' },
+                { url: 'https://example.com/about', anchor: 'About' },
+                { url: 'https://example.com/services', anchor: 'Services' },
+                { url: 'https://example.com/contact', anchor: 'Contact' }
+            ];
+            
+            if (countElement) {
+                countElement.textContent = `(Found ${fallbackLinks.length}) - Using Fallback Data`;
+                countElement.style.color = '#ef4444'; // Red to indicate issue
+            }
+            
+            table.innerHTML = fallbackLinks.map((link, index) => `
+                <tr class="hover:bg-gray-50" style="background-color: #fef2f2;">
+                    <td class="px-4 py-2 text-sm">${index + 1}</td>
+                    <td class="px-4 py-2 text-sm text-red-600">${link.url}</td>
+                    <td class="px-4 py-2 text-sm text-red-600">${link.anchor}</td>
+                </tr>
+            `).join('');
+            return;
+        }
+        
+        console.log(`✅ DEBUG: Successfully extracted ${internalLinks.length} internal links`);
         
         if (countElement) {
             countElement.textContent = `(Found ${internalLinks.length})`;
+            countElement.style.color = '#10b981'; // Green to indicate success
         }
         
         table.innerHTML = internalLinks.map((link, index) => `
@@ -1229,14 +1276,39 @@ class SEOAgent {
         
         if (!table) return;
         
-        const externalLinks = this.extractExternalLinks(data) || [
-            { url: 'https://github.com/', anchor: 'GitHub' },
-            { url: 'https://stackoverflow.com/', anchor: 'Stack Overflow' },
-            { url: 'https://developer.mozilla.org/', anchor: 'MDN' }
-        ];
+        console.log('🔍 DEBUG: UpdateExternalLinks called with data:', data);
+        
+        const externalLinks = this.extractExternalLinks(data);
+        
+        if (!externalLinks || externalLinks.length === 0) {
+            console.log('⚠️ DEBUG: No external links found, using fallback data');
+            // Only use fallback if extraction completely fails
+            const fallbackLinks = [
+                { url: 'https://github.com/', anchor: 'GitHub' },
+                { url: 'https://stackoverflow.com/', anchor: 'Stack Overflow' },
+                { url: 'https://developer.mozilla.org/', anchor: 'MDN' }
+            ];
+            
+            if (countElement) {
+                countElement.textContent = `(Found ${fallbackLinks.length}) - Using Fallback Data`;
+                countElement.style.color = '#ef4444'; // Red to indicate issue
+            }
+            
+            table.innerHTML = fallbackLinks.map((link, index) => `
+                <tr class="hover:bg-gray-50" style="background-color: #fef2f2;">
+                    <td class="px-4 py-2 text-sm">${index + 1}</td>
+                    <td class="px-4 py-2 text-sm text-red-600">${link.url}</td>
+                    <td class="px-4 py-2 text-sm text-red-600">${link.anchor}</td>
+                </tr>
+            `).join('');
+            return;
+        }
+        
+        console.log(`✅ DEBUG: Successfully extracted ${externalLinks.length} external links`);
         
         if (countElement) {
             countElement.textContent = `(Found ${externalLinks.length})`;
+            countElement.style.color = '#10b981'; // Green to indicate success
         }
         
         table.innerHTML = externalLinks.map((link, index) => `
@@ -1249,91 +1321,115 @@ class SEOAgent {
     }
 
     extractInternalLinks(data) {
-        if (data.pages && data.pages[0]) {
-            const page = data.pages[0];
-            const baseUrl = new URL(page.url);
-            
-            // Check for different possible data structures
-            let links = [];
-            
-            // If links array exists (from page.links)
-            if (page.links && Array.isArray(page.links)) {
-                // Handle simple URL strings from backend
-                links = page.links.map(linkUrl => ({
-                    href: linkUrl,
-                    text: '',
-                    anchor: '[No anchor text]'
-                }));
-            }
-            
-            // If internal_links array exists (structured data)
-            if (page.internal_links && Array.isArray(page.internal_links)) {
-                links = page.internal_links;
-            }
-            
-            // Re-extract from HTML if available
-            if (links.length === 0 && page.html_content) {
-                links = this.extractLinksFromHTML(page.html_content, baseUrl, true);
-            }
-            
-            // Filter for internal links and format properly
-            return links.filter(link => {
-                try {
-                    const linkUrl = new URL(link.href || link.url || link, baseUrl);
-                    return linkUrl.hostname === baseUrl.hostname;
-                } catch {
-                    return false;
-                }
-            }).map(link => ({
-                url: link.href || link.url || link,
-                anchor: link.text || link.anchor || link.title || '[No anchor text]'
+        console.log('🔍 Extracting internal links from data:', data);
+        
+        // Try different data paths to find the correct structure
+        const dataPath1 = data?.analysis?.pages?.[0]; // API response path
+        const dataPath2 = data?.pages?.[0]; // Direct analysis path
+        const page = dataPath1 || dataPath2;
+        
+        if (!page) {
+            console.log('❌ No page data found for internal links');
+            return null;
+        }
+        
+        console.log('📄 Page data for internal links:', page);
+        
+        let internalLinks = [];
+        
+        // 🎯 PRIORITY 1: Use structured internal_links array (enhanced extraction from page.py)
+        if (page.internal_links && Array.isArray(page.internal_links)) {
+            console.log('✅ Found structured internal_links array:', page.internal_links.length);
+            internalLinks = page.internal_links.map(link => ({
+                url: link.url || link,
+                anchor: link.anchor_text || link.title || '[No anchor text]'
             }));
         }
-        return null;
+        
+        // 🎯 PRIORITY 2: Process generic links array and filter for internal
+        else if (page.links && Array.isArray(page.links)) {
+            console.log('⚡ Processing generic links array for internal links:', page.links.length);
+            try {
+                const baseUrl = new URL(page.url);
+                internalLinks = page.links.filter(linkUrl => {
+                    try {
+                        if (typeof linkUrl === 'string') {
+                            const testUrl = new URL(linkUrl, baseUrl);
+                            return testUrl.hostname === baseUrl.hostname;
+                        }
+                        return false;
+                    } catch {
+                        return false;
+                    }
+                }).map(linkUrl => ({
+                    url: linkUrl,
+                    anchor: '[Extracted from links]'
+                }));
+            } catch (e) {
+                console.log('❌ Error processing links for internal:', e);
+            }
+        }
+        
+        console.log(`🔗 Final internal links extracted: ${internalLinks.length}`);
+        console.log('Internal links preview:', internalLinks.slice(0, 3));
+        
+        return internalLinks.length > 0 ? internalLinks : null;
     }
 
     extractExternalLinks(data) {
-        if (data.pages && data.pages[0]) {
-            const page = data.pages[0];
-            const baseUrl = new URL(page.url);
-            
-            // Check for different possible data structures
-            let links = [];
-            
-            // If links array exists (from page.links)
-            if (page.links && Array.isArray(page.links)) {
-                // Handle simple URL strings from backend
-                links = page.links.map(linkUrl => ({
-                    href: linkUrl,
-                    text: '',
-                    anchor: '[No anchor text]'
-                }));
-            }
-            
-            // If external_links array exists (structured data)
-            if (page.external_links && Array.isArray(page.external_links)) {
-                links = page.external_links;
-            }
-            
-            // Re-extract from HTML if available
-            if (links.length === 0 && page.html_content) {
-                links = this.extractLinksFromHTML(page.html_content, baseUrl, false);
-            }
-            
-            // Filter for external links and format properly
-            return links.filter(link => {
-                try {
-                    const linkUrl = new URL(link.href || link.url || link, baseUrl);
-                    return linkUrl.hostname !== baseUrl.hostname;
-                } catch {
-                    return false;
-                }
-            }).map(link => ({
-                url: link.href || link.url || link,
-                anchor: link.text || link.anchor || link.title || '[No anchor text]'
+        console.log('🔍 Extracting external links from data:', data);
+        
+        // Try different data paths to find the correct structure
+        const dataPath1 = data?.analysis?.pages?.[0]; // API response path
+        const dataPath2 = data?.pages?.[0]; // Direct analysis path
+        const page = dataPath1 || dataPath2;
+        
+        if (!page) {
+            console.log('❌ No page data found for external links');
+            return null;
+        }
+        
+        console.log('📄 Page data for external links:', page);
+        
+        let externalLinks = [];
+        
+        // 🎯 PRIORITY 1: Use structured external_links array (enhanced extraction from page.py)
+        if (page.external_links && Array.isArray(page.external_links)) {
+            console.log('✅ Found structured external_links array:', page.external_links.length);
+            externalLinks = page.external_links.map(link => ({
+                url: link.url || link,
+                anchor: link.anchor_text || link.title || '[No anchor text]'
             }));
         }
-        return null;
+        
+        // 🎯 PRIORITY 2: Process generic links array and filter for external
+        else if (page.links && Array.isArray(page.links)) {
+            console.log('⚡ Processing generic links array for external links:', page.links.length);
+            try {
+                const baseUrl = new URL(page.url);
+                externalLinks = page.links.filter(linkUrl => {
+                    try {
+                        if (typeof linkUrl === 'string') {
+                            const testUrl = new URL(linkUrl, baseUrl);
+                            return testUrl.hostname !== baseUrl.hostname;
+                        }
+                        return false;
+                    } catch {
+                        return false;
+                    }
+                }).map(linkUrl => ({
+                    url: linkUrl,
+                    anchor: '[Extracted from links]'
+                }));
+            } catch (e) {
+                console.log('❌ Error processing links for external:', e);
+            }
+        }
+        
+        console.log(`🔗 Final external links extracted: ${externalLinks.length}`);
+        console.log('External links preview:', externalLinks.slice(0, 3));
+        
+        return externalLinks.length > 0 ? externalLinks : null;
     }
 
     extractLinksFromHTML(htmlContent, baseUrl, isInternal) {
@@ -1540,196 +1636,196 @@ class SEOAgent {
         });
     }
 
-    addStrategyToTodo(strategyIndex) {
+    async addStrategyToTodo(strategyIndex) {
         if (this.currentAnalysis && this.currentAnalysis.strategic_recommendations) {
             const strategy = this.currentAnalysis.strategic_recommendations[strategyIndex];
             if (strategy) {
-                this.addTodoFromRecommendation(
-                    `${strategy.category}: ${strategy.action || strategy.strategy}`, 
-                    strategy.priority || 'medium'
-                );
-                this.showAlert('Strategy added to TODO list!', 'success');
-            }
-        }
-    }
+                try {
+                    // Call the backend API to create TODO from strategy
+                    const response = await fetch(`${this.apiBaseUrl}/todos/from-strategy`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            strategy: strategy
+                        })
+                    });
 
-    linkToAnalysisSection(category) {
-        // 智能链接到相关分析部分
-        const sectionMap = {
-            'Title Optimization': 'seo-analysis',
-            'Title Enhancement': 'seo-analysis', 
-            'Meta Description': 'seo-analysis',
-            'Description Enhancement': 'seo-analysis',
-            'Content Structure': 'seo-analysis',
-            'Image Optimization': 'seo-analysis',
-            'Technical SEO': 'site-compliance',
-            'Link Building': 'links',
-            'Competitive Analysis': 'summary',
-            'Advanced Optimization': 'seo-analysis',
-            'Foundation Strengthening': 'summary',
-            'Critical Foundation': 'summary'
-        };
-        
-        const targetSection = sectionMap[category] || 'summary';
-        this.showSection(targetSection);
-        
-        // 显示提示消息
-        this.showAlert(`Switched to ${this.getSectionDisplayName(targetSection)} section for "${category}" details`, 'info');
-    }
+                    const result = await response.json();
 
-    getSectionDisplayName(sectionId) {
-        const displayNames = {
-            'summary': 'Summary',
-            'seo-analysis': 'SEO Analysis', 
-            'site-compliance': 'Site Compliance',
-            'links': 'Links',
-            'seo-strategy': 'Growth Strategies'
-        };
-        return displayNames[sectionId] || sectionId;
-    }
-
-    generateTodos(data) {
-        const autoTodos = [];
-        
-        if (data.pages && data.pages.length > 0) {
-            const page = data.pages[0];
-            const issues = this.generateIssuesList(data);
-            
-            issues.filter(issue => issue.type === 'critical').forEach(issue => {
-                autoTodos.push({
-                    id: Date.now() + Math.random(),
-                    text: `Fix ${issue.title}: ${issue.message}`,
-                    priority: 'high',
-                    completed: false,
-                    createdAt: new Date().toISOString(),
-                    auto: true
-                });
-            });
-            
-            issues.filter(issue => issue.type === 'warning').forEach(issue => {
-                autoTodos.push({
-                    id: Date.now() + Math.random(),
-                    text: `Improve ${issue.title}: ${issue.message}`,
-                    priority: 'medium',
-                    completed: false,
-                    createdAt: new Date().toISOString(),
-                    auto: true
-                });
-            });
-        }
-        
-        if (autoTodos.length < 3) {
-            autoTodos.push(
-                {
-                    id: Date.now() + Math.random() + 1,
-                    text: 'Optimize page loading speed',
-                    priority: 'medium',
-                    completed: false,
-                    createdAt: new Date().toISOString(),
-                    auto: true
-                },
-                {
-                    id: Date.now() + Math.random() + 2,
-                    text: 'Add internal linking structure',
-                    priority: 'low',
-                    completed: false,
-                    createdAt: new Date().toISOString(),
-                    auto: true
+                    if (result.success) {
+                        // Also add to local storage for immediate UI update
+                        this.addTodoFromRecommendation(
+                            result.todo.text,
+                            result.todo.priority
+                        );
+                        this.showAlert('Strategy added to TODO list!', 'success');
+                    } else if (result.duplicate) {
+                        this.showAlert(result.message, 'warning');
+                    } else {
+                        throw new Error(result.error || 'Failed to add strategy to TODO');
+                    }
+                } catch (error) {
+                    console.error('Failed to add strategy to TODO:', error);
+                    // Fallback to local storage if API fails
+                    this.addTodoFromRecommendation(
+                        `${strategy.category}: ${strategy.action || strategy.strategy}`, 
+                        strategy.priority || 'medium'
+                    );
+                    this.showAlert('Strategy added to TODO list! (offline mode)', 'success');
                 }
-            );
-        }
-        
-        autoTodos.forEach(autoTodo => {
-            const exists = this.todos.some(todo => 
-                todo.text.toLowerCase().includes(autoTodo.text.toLowerCase().substring(0, 20))
-            );
-            if (!exists) {
-                this.todos.push(autoTodo);
-            }
-        });
-        
-        this.saveTodos();
-        this.renderTodos();
-        this.updateTodoStats();
-        
-        if (autoTodos.length > 0) {
-            this.showAlert(`Auto-generated ${autoTodos.filter(todo => !this.todos.some(existing => existing.text === todo.text)).length} SEO optimization tasks`, 'info');
-        }
-    }
-
-    showAddTodoForm() {
-        const form = document.getElementById('addTodoForm');
-        if (form) {
-            form.classList.toggle('hidden');
-            if (!form.classList.contains('hidden')) {
-                document.getElementById('todoInput')?.focus();
             }
         }
     }
 
-    saveTodo() {
-        const input = document.getElementById('todoInput');
-        const priority = document.getElementById('todoPriority');
-        
-        const text = input?.value?.trim();
-        if (!text) return;
-        
-        const todo = {
-            id: Date.now(),
-            text: text,
-            priority: priority?.value || 'medium',
-            completed: false,
-            createdAt: new Date().toISOString()
-        };
-        
-        this.todos.push(todo);
-        this.saveTodos();
-        this.renderTodos();
-        this.updateTodoStats();
-        
-        if (input) input.value = '';
-        this.showAddTodoForm();
+    async syncTodosWithBackend() {
+        // 🔄 Sync local todos with backend API
+        try {
+            // Get todos from backend
+            const response = await fetch(`${this.apiBaseUrl}/todos`, {
+                method: 'GET'
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                
+                // Merge backend todos with local todos
+                const backendTodos = result.todos || [];
+                const localTodos = this.todos;
+                
+                // Create a combined list, prioritizing backend data
+                const mergedTodos = [...backendTodos];
+                
+                // Add local todos that don't exist in backend
+                localTodos.forEach(localTodo => {
+                    const existsInBackend = backendTodos.some(backendTodo => 
+                        backendTodo.text === localTodo.text || backendTodo.id === localTodo.id
+                    );
+                    
+                    if (!existsInBackend) {
+                        mergedTodos.push(localTodo);
+                    }
+                });
+                
+                this.todos = mergedTodos;
+                this.saveTodos();
+                this.renderTodos();
+                this.updateTodoStats();
+                
+                console.log(`🔄 Synced ${mergedTodos.length} todos with backend`);
+            }
+        } catch (error) {
+            console.warn('Failed to sync todos with backend:', error);
+            // Continue using local storage if backend sync fails
+        }
     }
 
-    addTodoFromRecommendation(action, priority) {
-        const todo = {
-            id: Date.now(),
-            text: action,
-            priority: priority,
-            completed: false,
-            createdAt: new Date().toISOString()
-        };
-        
-        this.todos.push(todo);
-        this.saveTodos();
-        this.renderTodos();
-        this.updateTodoStats();
-        
-        this.showAlert('Added to TODO list', 'success');
-    }
-
-    toggleTodo(id) {
+    async toggleTodo(id) {
         const todo = this.todos.find(t => t.id === id);
-        if (todo) {
-            todo.completed = !todo.completed;
+        if (!todo) return;
+
+        const oldCompleted = todo.completed;
+        todo.completed = !todo.completed;
+
+        try {
+            // Update backend first
+            const response = await fetch(`${this.apiBaseUrl}/todos`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: id,
+                    completed: todo.completed
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Backend update failed');
+            }
+
+            // Update local storage and UI
             this.saveTodos();
             this.renderTodos();
             this.updateTodoStats();
+        } catch (error) {
+            console.warn('Failed to update todo on backend:', error);
+            // Revert the change if backend update failed
+            todo.completed = oldCompleted;
+            
+            // Still update local storage and UI for offline functionality
+            this.saveTodos();
+            this.renderTodos();
+            this.updateTodoStats();
+            
+            this.showAlert('Todo updated locally (backend sync failed)', 'warning');
         }
     }
 
-    deleteTodo(id) {
-        this.todos = this.todos.filter(t => t.id !== id);
-        this.saveTodos();
-        this.renderTodos();
-        this.updateTodoStats();
+    async deleteTodo(id) {
+        try {
+            // Delete from backend first
+            const response = await fetch(`${this.apiBaseUrl}/todos`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: id
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Backend delete failed');
+            }
+
+            // Remove from local storage
+            this.todos = this.todos.filter(t => t.id !== id);
+            this.saveTodos();
+            this.renderTodos();
+            this.updateTodoStats();
+        } catch (error) {
+            console.warn('Failed to delete todo from backend:', error);
+            
+            // Still delete locally for offline functionality
+            this.todos = this.todos.filter(t => t.id !== id);
+            this.saveTodos();
+            this.renderTodos();
+            this.updateTodoStats();
+            
+            this.showAlert('Todo deleted locally (backend sync failed)', 'warning');
+        }
     }
 
-    clearCompleted() {
-        this.todos = this.todos.filter(t => !t.completed);
-        this.saveTodos();
-        this.renderTodos();
-        this.updateTodoStats();
+    async clearCompleted() {
+        try {
+            // Clear completed from backend
+            const response = await fetch(`${this.apiBaseUrl}/todos/clear-completed`, {
+                method: 'POST'
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                this.showAlert(`Cleared ${result.cleared_count} completed todos`, 'success');
+            }
+
+            // Also clear locally
+            this.todos = this.todos.filter(t => !t.completed);
+            this.saveTodos();
+            this.renderTodos();
+            this.updateTodoStats();
+        } catch (error) {
+            console.warn('Failed to clear completed todos from backend:', error);
+            
+            // Still clear locally
+            this.todos = this.todos.filter(t => !t.completed);
+            this.saveTodos();
+            this.renderTodos();
+            this.updateTodoStats();
+            
+            this.showAlert('Completed todos cleared locally', 'warning');
+        }
     }
 
     renderTodos() {

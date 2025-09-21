@@ -96,6 +96,8 @@ class Page:
             punctuation.encode(encoding), str(" " * len(punctuation)).encode(encoding)
         )
         self.links = []
+        self.internal_links = []  # ENHANCED: Store categorized internal links
+        self.external_links = []  # ENHANCED: Store categorized external links
         self.total_word_count = 0
         self.wordcount = Counter()
         self.bigrams = Counter()
@@ -135,6 +137,10 @@ class Page:
             "trigrams": self.trigrams,
             "warnings": self.warnings,
             "content_hash": self.content_hash,
+            "links": self.links,  # FIXED: Include extracted links in output
+            "content": self.content,  # FIXED: Include full content for analysis
+            "internal_links": getattr(self, 'internal_links', []),  # ENHANCED: Categorized internal links
+            "external_links": getattr(self, 'external_links', []),  # ENHANCED: Categorized external links
         }
 
         if self.analyze_headings:
@@ -508,36 +514,72 @@ class Page:
 
     def analyze_a_tags(self, bs):
         """
-        Add any new links (that we didn't find in the sitemap)
+        Enhanced link analysis with proper categorization and anchor text extraction
         """
         anchors = bs.find_all("a", href=True)
+        internal_links = []
+        external_links = []
 
         for tag in anchors:
             tag_href = tag["href"]
-            tag_text = tag.text.lower().strip()
+            tag_text = tag.text.strip() if tag.text else ""
+            tag_title = tag.get("title", "")
 
-            if len(tag.get("title", "")) == 0:
+            # Warn about missing title attributes
+            if len(tag_title) == 0:
                 self.warn("Anchor missing title tag: {0}".format(tag_href))
 
-            if tag_text in ["click here", "page", "article"]:
+            # Warn about generic anchor text
+            if tag_text.lower() in ["click here", "page", "article", "read more", "here"]:
                 self.warn("Anchor text contains generic text: {0}".format(tag_text))
 
-            if self.base_domain.netloc not in tag_href and ":" in tag_href:
+            # Skip empty or invalid hrefs
+            if not tag_href or tag_href.startswith(('#', 'javascript:', 'mailto:', 'tel:')):
                 continue
 
-            modified_url = self.rel_to_abs_url(tag_href)
+            # Convert relative URLs to absolute
+            if tag_href.startswith('http'):
+                absolute_url = tag_href
+            else:
+                absolute_url = self.rel_to_abs_url(tag_href)
 
-            url_filename, url_file_extension = os.path.splitext(modified_url)
-
-            # ignore links to images
-            if url_file_extension in IMAGE_EXTENSIONS:
+            # Remove file extension check - we want all links
+            url_filename, url_file_extension = os.path.splitext(absolute_url)
+            
+            # Skip image links but keep others
+            if url_file_extension.lower() in IMAGE_EXTENSIONS:
                 continue
 
-            # remove hash links to all urls
-            if "#" in modified_url:
-                modified_url = modified_url[: modified_url.rindex("#")]
+            # Remove hash fragments for cleaner URLs
+            if "#" in absolute_url:
+                clean_url = absolute_url[:absolute_url.rindex("#")]
+            else:
+                clean_url = absolute_url
 
-            self.links.append(modified_url)
+            # Determine if link is internal or external
+            link_data = {
+                "url": clean_url,
+                "anchor_text": tag_text,
+                "title": tag_title
+            }
+
+            # Check if this is an internal link (same domain)
+            if self.base_domain.netloc in absolute_url or not ("://" in absolute_url):
+                internal_links.append(link_data)
+                self.links.append(clean_url)  # Keep backward compatibility
+            else:
+                external_links.append(link_data)
+
+        # Store categorized links
+        self.internal_links = internal_links
+        self.external_links = external_links
+        
+        # Log extraction results for debugging
+        print(f"🔗 Link extraction for {self.url}: {len(internal_links)} internal, {len(external_links)} external")
+        if internal_links:
+            print(f"   Internal links: {[link['url'] for link in internal_links[:3]]}...")
+        if external_links:
+            print(f"   External links: {[link['url'] for link in external_links[:3]]}...")
 
     def rel_to_abs_url(self, link):
         if ":" in link:

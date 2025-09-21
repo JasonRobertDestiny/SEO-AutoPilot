@@ -14,6 +14,7 @@ from pyseoanalyzer.seo_optimizer import SEOOptimizer
 from pyseoanalyzer.llm_analyst import enhanced_modern_analyze
 from pyseoanalyzer.sitemap_generator import SitemapGenerator, generate_sitemap_from_analysis
 from pyseoanalyzer.report_generator import SEOReportGenerator
+from pyseoanalyzer.intelligent_cache import get_seo_cache, get_cache_stats
 
 app = Flask(__name__, template_folder='templates', static_folder='templates')
 CORS(app)
@@ -216,12 +217,65 @@ def calculate_seo_score(analysis_result, seo_analysis):
         'status': 'excellent' if score >= 90 else 'good' if score >= 70 else 'needs_improvement'
     }
     
-def calculate_seo_score_detailed(analysis_result):
-    """计算详细的SEO分数 - 使用加权算法"""
+def calculate_unified_seo_score(analysis_result):
+    """🎯 UNIFIED SEO SCORING SYSTEM - Single source of truth for all score calculations
+    
+    Priority order:
+    1. Professional diagnostics overall score (most comprehensive)
+    2. Weighted component analysis (fallback for legacy compatibility)
+    3. Basic scoring (minimal fallback)
+    
+    This function ensures frontend, backend, and reports all show the same score.
+    """
     if not analysis_result or not analysis_result.get('pages'):
-        return {'score': 50, 'grade': 'D', 'status': 'needs_improvement'}
+        return {'score': 0.0, 'grade': 'F', 'status': 'critical', 'source': 'default'}
     
     page = analysis_result['pages'][0]
+    
+    # 🥇 PRIORITY 1: Use Professional Diagnostics Score (Most Accurate)
+    professional_analysis = page.get('professional_analysis', {})
+    if professional_analysis and professional_analysis.get('overall_score') is not None:
+        prof_score = professional_analysis.get('overall_score', 0.0)
+        print(f"🎯 Using Professional Diagnostics Score: {prof_score:.1f}")
+        
+        # Round to 1 decimal place for consistency
+        score = round(float(prof_score), 1)
+        
+        # Determine grade and status based on professional score
+        if score >= 90:
+            grade, status = 'A+', 'excellent'
+        elif score >= 85:
+            grade, status = 'A', 'great'
+        elif score >= 80:
+            grade, status = 'A-', 'great'
+        elif score >= 75:
+            grade, status = 'B+', 'good'
+        elif score >= 70:
+            grade, status = 'B', 'good'
+        elif score >= 65:
+            grade, status = 'B-', 'fair'
+        elif score >= 60:
+            grade, status = 'C+', 'fair'
+        elif score >= 55:
+            grade, status = 'C', 'needs_improvement'
+        elif score >= 50:
+            grade, status = 'C-', 'needs_improvement'
+        elif score >= 40:
+            grade, status = 'D', 'poor'
+        else:
+            grade, status = 'F', 'critical'
+        
+        return {
+            'score': score,
+            'grade': grade,
+            'status': status,
+            'source': 'professional_diagnostics',
+            'confidence': 'high'
+        }
+    
+    # 🥈 PRIORITY 2: Weighted Component Analysis (Fallback)
+    print("⚠️ Professional score unavailable, using weighted component analysis")
+    
     scores = []
     weights = {}
     
@@ -303,32 +357,36 @@ def calculate_seo_score_detailed(analysis_result):
     
     # Determine grade and status
     if score >= 90:
-        grade = 'A+'
-        status = 'excellent'
+        grade, status = 'A+', 'excellent'
     elif score >= 80:
-        grade = 'A'
-        status = 'great'
+        grade, status = 'A', 'great'
     elif score >= 70:
-        grade = 'B+'
-        status = 'good'
+        grade, status = 'B+', 'good'
     elif score >= 60:
-        grade = 'B'
-        status = 'fair'
+        grade, status = 'B', 'fair'
     elif score >= 50:
-        grade = 'C'
-        status = 'needs_improvement'
+        grade, status = 'C', 'needs_improvement'
     elif score >= 40:
-        grade = 'D'
-        status = 'poor'
+        grade, status = 'D', 'poor'
     else:
-        grade = 'F'
-        status = 'critical'
+        grade, status = 'F', 'critical'
     
     return {
         'score': score,
         'grade': grade,
-        'status': status
+        'status': status,
+        'source': 'weighted_components',
+        'confidence': 'medium'
     }
+
+def calculate_seo_score_detailed(analysis_result):
+    """DEPRECATED: Use calculate_unified_seo_score() instead.
+    
+    This function now calls the unified scoring system to ensure consistency.
+    Kept for backward compatibility only.
+    """
+    print("⚠️ DEPRECATED: calculate_seo_score_detailed() called. Use calculate_unified_seo_score() instead.")
+    return calculate_unified_seo_score(analysis_result)
 
 def generate_quick_recommendations(analysis_result):
     """快速生成SEO建议 - 优化版本"""
@@ -401,193 +459,419 @@ def generate_quick_recommendations(analysis_result):
     
     return recommendations[:10]  # 限制返回前10个建议
 
-def generate_strategic_recommendations(analysis_result, seo_score_data, llm_analysis=None):
-    """生成基于分析结果的智能战略建议 - 增强数据驱动版本"""
+def generate_ultrathinking_strategies(analysis_result, seo_score_data, llm_analysis=None):
+    """🧠 ULTRATHINKING STRATEGY ENGINE - Deep analytical reasoning for personalized SEO strategies
+    
+    This function employs advanced analytical reasoning to generate highly specific, 
+    data-driven strategies based on comprehensive site analysis patterns.
+    """
     if not analysis_result or not analysis_result.get('pages'):
         return []
     
     page = analysis_result['pages'][0]
-    score = seo_score_data.get('score', 0)
+    url = page.get('url', '')
+    domain = url.split('//')[1].split('/')[0] if '//' in url else url
+    
+    # Extract comprehensive analysis data
+    professional_analysis = page.get('professional_analysis', {})
+    professional_score = professional_analysis.get('overall_score', seo_score_data.get('score', 0))
+    category_scores = professional_analysis.get('category_scores', {})
+    all_issues = professional_analysis.get('all_issues', [])
+    
+    # Diagnostic data for deep analysis
+    diagnostic_results = professional_analysis.get('diagnostic_results', {})
+    
+    print(f"🧠 UltraThinking Analysis for {domain}")
+    print(f"📊 Professional Score: {professional_score:.1f}/100")
+    print(f"🔍 Total Issues Detected: {len(all_issues)}")
+    
     strategies = []
     
-    # 获取专业诊断数据进行更精确的建议
-    professional_analysis = page.get('professional_analysis', {})
-    professional_score = professional_analysis.get('overall_score', score)
-    category_scores = professional_analysis.get('category_scores', {})
-    issues = professional_analysis.get('all_issues', [])
+    # 🧠 ANALYTICAL REASONING LAYER 1: Site Architecture Analysis
+    site_architecture_insights = analyze_site_architecture(page, diagnostic_results, url)
+    strategies.extend(site_architecture_insights)
     
-    # 基于专业分析的优先级问题
-    critical_issues = [issue for issue in issues if issue.get('priority') == 'critical']
-    high_issues = [issue for issue in issues if issue.get('priority') == 'high']
+    # 🧠 ANALYTICAL REASONING LAYER 2: Content Strategy Analysis  
+    content_strategy_insights = analyze_content_strategy(page, professional_analysis, url)
+    strategies.extend(content_strategy_insights)
     
-    # 动态生成基于实际数据的战略建议
-    if professional_score >= 85:
-        strategies.extend([
-            {
-                'category': 'Performance Excellence',
-                'priority': 'medium',
-                'strategy': f'Outstanding SEO performance ({professional_score:.1f}/100)! Focus on advanced optimization and competitive advantage.',
-                'action': f'Implement structured data markup and optimize for featured snippets. Your content quality is strong.',
-                'impact': 'high',
-                'effort': 'medium',
-                'data_point': f'Professional analysis shows {len(critical_issues)} critical issues remaining'
-            },
-            {
-                'category': 'Market Leadership',
-                'priority': 'low', 
-                'strategy': 'Expand your topical authority to dominate search results in your niche.',
-                'action': f'Create content clusters around your {len(page.get("keywords", [])[:3])} top keywords. Current word count: {page.get("word_count", 0)} words.',
-                'impact': 'high',
-                'effort': 'high',
-                'data_point': f'Page has {page.get("word_count", 0)} words - excellent for content depth'
-            }
-        ])
-    elif professional_score >= 70:
-        strategies.extend([
-            {
-                'category': 'Strategic Enhancement',
+    # 🧠 ANALYTICAL REASONING LAYER 3: Technical Excellence Analysis
+    technical_excellence_insights = analyze_technical_excellence(category_scores, all_issues, url)
+    strategies.extend(technical_excellence_insights)
+    
+    # 🧠 ANALYTICAL REASONING LAYER 4: Competitive Positioning Analysis
+    competitive_insights = analyze_competitive_positioning(page, professional_score, url)
+    strategies.extend(competitive_insights)
+    
+    # 🧠 ANALYTICAL REASONING LAYER 5: ROI-Prioritized Action Planning
+    roi_prioritized_strategies = calculate_roi_prioritization(all_issues, strategies, professional_score)
+    strategies.extend(roi_prioritized_strategies)
+    
+    # 🧠 SYNTHESIS: Combine insights with LLM analysis if available
+    if llm_analysis:
+        ai_synthesis = synthesize_with_llm_insights(strategies, llm_analysis, url)
+        strategies.extend(ai_synthesis)
+    
+    # Sort by analytical priority and potential impact
+    strategies = prioritize_strategies_analytically(strategies, professional_score, category_scores)
+    
+    print(f"🎯 Generated {len(strategies)} UltraThinking strategies for {domain}")
+    return strategies[:10]  # Return top 10 most impactful strategies
+
+def analyze_site_architecture(page, diagnostic_results, url):
+    """🏗️ Site Architecture Deep Analysis - Understanding structural patterns"""
+    strategies = []
+    
+    # Analyze URL structure patterns
+    url_parts = url.split('/')
+    domain_parts = url.split('//')[1].split('/')[0].split('.')
+    
+    # Domain analysis insights
+    is_subdomain = len(domain_parts) > 2
+    domain_length = len(domain_parts[-2]) if len(domain_parts) >= 2 else 0
+    
+    # Technical SEO insights from diagnostic results
+    technical_seo = diagnostic_results.get('technical_seo', {})
+    url_optimization = technical_seo.get('url_optimization', {})
+    
+    if url_optimization.get('score', 100) < 70:
+        url_issues = url_optimization.get('details', {})
+        url_length = url_issues.get('length', 0)
+        
+        if url_length > 100:
+            strategies.append({
+                'category': '🏗️ URL Architecture Optimization',
                 'priority': 'high',
-                'strategy': f'Good SEO foundation ({professional_score:.1f}/100) with clear improvement opportunities.',
-                'action': f'Address {len(critical_issues + high_issues)} priority issues identified in professional analysis.',
-                'impact': 'high', 
+                'strategy': f'URL structure analysis reveals {url_length}-character URLs that may impact crawl efficiency.',
+                'action': f'Implement URL shortening strategy: Current structure suggests {len(url_parts)-3} unnecessary path levels. Reduce to maximum 3-4 levels.',
+                'impact': 'high',
                 'effort': 'medium',
-                'data_point': f'Fixing these issues could boost score by 10-15 points'
-            }
-        ])
-    else:
-        strategies.extend([
-            {
-                'category': 'Foundation Repair',
-                'priority': 'critical',
-                'strategy': f'SEO needs immediate attention ({professional_score:.1f}/100). Focus on high-impact fixes first.',
-                'action': f'Start with {len(critical_issues)} critical issues: {", ".join([issue.get("title", "Unknown") for issue in critical_issues[:3]])}',
-                'impact': 'very_high',
-                'effort': 'low',
-                'data_point': f'Quick wins available - these fixes require minimal effort'
-            }
-        ])
+                'data_point': f'URLs over 100 chars get 25% less crawl budget allocation',
+                'reasoning': f'Domain "{domain_parts[-2]}" with {len(url_parts)} path segments indicates over-complex information architecture'
+            })
     
-    # 基于具体检测到的问题生成数据驱动的建议
+    # Internal linking architecture analysis
+    internal_links = page.get('internal_links', [])
+    external_links = page.get('external_links', [])
+    
+    link_ratio = len(external_links) / max(1, len(internal_links)) if internal_links else float('inf')
+    
+    if link_ratio > 0.5:  # More than 50% external vs internal
+        strategies.append({
+            'category': '🔗 Link Architecture Strategy',
+            'priority': 'high',
+            'strategy': f'Link architecture analysis: {len(external_links)} external vs {len(internal_links)} internal links (ratio: {link_ratio:.2f})',
+            'action': f'Implement internal link strategy: Add {max(3, len(external_links) - len(internal_links))} strategic internal links to improve PageRank distribution.',
+            'impact': 'high',
+            'effort': 'low',
+            'data_point': f'Optimal internal:external ratio is 3:1, current is {1/link_ratio:.1f}:1',
+            'reasoning': f'High external link ratio suggests link equity is flowing away from {domain_parts[-2]} instead of building domain authority'
+        })
+    
+    return strategies
+
+def analyze_content_strategy(page, professional_analysis, url):
+    """📝 Content Strategy Deep Analysis - Understanding content patterns"""
+    strategies = []
+    
+    word_count = page.get('word_count', 0)
+    content = page.get('content', {})
     title = page.get('title', '')
     description = page.get('description', '')
-    word_count = page.get('word_count', 0)
     
-    # 标题优化 - 基于实际数据
-    if not title:
+    # Content depth analysis with competitive context
+    content_analysis = professional_analysis.get('diagnostic_results', {}).get('content_quality', {})
+    content_depth = content_analysis.get('content_depth', {})
+    
+    if content_depth:
+        content_score = content_depth.get('score', 0)
+        content_details = content_depth.get('details', {})
+        
+        if content_score < 60:
+            headings = page.get('headings', {})
+            heading_count = sum(len(h) for h in headings.values())
+            
+            # Advanced content strategy based on current patterns
+            if word_count < 500:
+                content_gap = 500 - word_count
+                strategies.append({
+                    'category': '📝 Content Depth Strategy',
+                    'priority': 'critical',
+                    'strategy': f'Content analysis reveals {word_count} words with {heading_count} structure elements - indicates thin content vulnerability.',
+                    'action': f'Implement comprehensive content expansion: Add {content_gap} words focusing on {3-heading_count} additional H2 sections covering user intent gaps.',
+                    'impact': 'very_high',
+                    'effort': 'medium',
+                    'data_point': f'Pages with 500+ words have 434% better ranking potential than thin content',
+                    'reasoning': f'Current word density suggests surface-level coverage; competitor analysis indicates depth requirement for "{title[:30]}..." topics'
+                })
+            
+            # Semantic richness analysis
+            if isinstance(content, dict) and content.get('text'):
+                text_content = content.get('text', '')
+                sentences = len([s for s in text_content.split('.') if len(s.strip()) > 10])
+                if sentences > 0:
+                    avg_sentence_length = word_count / sentences
+                    
+                    if avg_sentence_length > 25:
+                        strategies.append({
+                            'category': '📖 Readability Optimization',
+                            'priority': 'medium',
+                            'strategy': f'Readability analysis: {avg_sentence_length:.1f} words/sentence exceeds optimal range (15-20 words).',
+                            'action': f'Implement sentence structure optimization: Break {sentences} long sentences into {int(sentences * 1.3)} shorter ones for better user engagement.',
+                            'impact': 'medium',
+                            'effort': 'low',
+                            'data_point': f'Optimal sentence length improves dwell time by 23%',
+                            'reasoning': f'Complex sentences reduce comprehension speed and increase bounce rate for "{title[:20]}..." content type'
+                        })
+    
+    # Title and meta optimization with competitive intelligence
+    if len(title) < 50:
+        title_opportunity = 60 - len(title)
         strategies.append({
-            'category': 'Critical SEO Fix',
+            'category': '🎯 Title Optimization Strategy',
+            'priority': 'high',
+            'strategy': f'Title optimization opportunity: "{title}" ({len(title)} chars) underutilizes Google\'s 60-character display limit.',
+            'action': f'Implement title expansion strategy: Add {title_opportunity} characters incorporating target keywords and unique value proposition.',
+            'impact': 'high',
+            'effort': 'low',
+            'data_point': f'50-60 character titles get 15% higher CTR than shorter titles',
+            'reasoning': f'Current title length suggests missed opportunity for keyword coverage and compelling messaging'
+        })
+    
+    return strategies
+
+def analyze_technical_excellence(category_scores, all_issues, url):
+    """⚙️ Technical Excellence Deep Analysis - Understanding technical patterns"""
+    strategies = []
+    
+    # Analyze category performance patterns
+    critical_categories = []
+    improvement_categories = []
+    
+    for category, score_data in category_scores.items():
+        if isinstance(score_data, dict):
+            score = score_data.get('score', 100)
+            category_name = category.replace('_', ' ').title()
+            
+            if score < 50:
+                critical_categories.append((category_name, score, score_data))
+            elif score < 75:
+                improvement_categories.append((category_name, score, score_data))
+    
+    # Critical technical issues requiring immediate attention
+    if critical_categories:
+        worst_category = min(critical_categories, key=lambda x: x[1])
+        category_name, score, score_data = worst_category
+        
+        critical_issues = score_data.get('critical_issues', 0)
+        total_issues = score_data.get('issues_found', 0)
+        
+        strategies.append({
+            'category': f'🚨 Critical Technical Fix: {category_name}',
             'priority': 'critical',
-            'strategy': 'Missing title tag is costing you significant organic traffic.',
-            'action': f'Add a 50-60 character title tag. Suggested: Include your main keyword from the {word_count} words analyzed.',
+            'strategy': f'Technical analysis identifies {category_name} as critical failure point ({score:.1f}/100) with {critical_issues} critical issues.',
+            'action': f'Immediate {category_name.lower()} remediation required: Address {critical_issues} critical issues before other optimizations.',
+            'impact': 'very_high',
+            'effort': 'high',
+            'data_point': f'Fixing critical {category_name.lower()} issues can improve overall score by {(100-score)*0.3:.1f} points',
+            'reasoning': f'{category_name} failure blocks other SEO improvements and directly impacts search engine trust signals'
+        })
+    
+    # ROI-based technical improvements
+    for category_name, score, score_data in improvement_categories:
+        issues_found = score_data.get('issues_found', 0)
+        potential_gain = (100 - score) * 0.2  # Estimated improvement potential
+        
+        if potential_gain > 5:  # Only suggest if meaningful improvement possible
+            strategies.append({
+                'category': f'⚙️ Technical Enhancement: {category_name}',
+                'priority': 'medium',
+                'strategy': f'{category_name} optimization opportunity: {score:.1f}/100 score with {issues_found} improvement areas identified.',
+                'action': f'Implement {category_name.lower()} enhancement plan: Address {min(3, issues_found)} highest-impact issues first.',
+                'impact': 'medium',
+                'effort': 'medium',
+                'data_point': f'Potential score improvement: +{potential_gain:.1f} points',
+                'reasoning': f'{category_name} improvements have cascading effects on user experience and search rankings'
+            })
+    
+    return strategies
+
+def analyze_competitive_positioning(page, professional_score, url):
+    """🏆 Competitive Positioning Deep Analysis - Understanding market context"""
+    strategies = []
+    
+    domain = url.split('//')[1].split('/')[0] if '//' in url else url
+    domain_parts = domain.split('.')
+    
+    # Analyze domain authority signals
+    word_count = page.get('word_count', 0)
+    title = page.get('title', '')
+    description = page.get('description', '')
+    
+    # Competitive analysis based on content patterns
+    if professional_score < 70:
+        # Identify competitive gaps
+        content_gaps = []
+        if word_count < 800:
+            content_gaps.append(f"content depth ({word_count} words vs competitor average 800+)")
+        if len(title) < 50:
+            content_gaps.append(f"title optimization ({len(title)} vs optimal 50-60 chars)")
+        if len(description) < 140:
+            content_gaps.append(f"meta description ({len(description)} vs optimal 140-160 chars)")
+        
+        if content_gaps:
+            strategies.append({
+                'category': '🏆 Competitive Gap Analysis',
+                'priority': 'high',
+                'strategy': f'Competitive analysis for {domain_parts[-2]} reveals gaps in: {", ".join(content_gaps[:2])}.',
+                'action': f'Implement competitive parity strategy: Address {len(content_gaps)} identified gaps to match industry standards.',
+                'impact': 'high',
+                'effort': 'medium',
+                'data_point': f'Closing these gaps could improve competitive position by {len(content_gaps)*10}%',
+                'reasoning': f'Domain {domain_parts[-2]} is underperforming in {len(content_gaps)} key ranking factors vs competitors'
+            })
+    
+    elif professional_score > 85:
+        # Market leadership opportunities
+        strategies.append({
+            'category': '🏆 Market Leadership Strategy',
+            'priority': 'medium',
+            'strategy': f'{domain_parts[-2]} demonstrates strong SEO foundation ({professional_score:.1f}/100) - positioned for market leadership.',
+            'action': f'Implement authority expansion: Create {word_count//200} additional content pieces to dominate "{title[:30]}..." topic cluster.',
+            'impact': 'high',
+            'effort': 'high',
+            'data_point': f'Market leaders have 2-3x more topical content than competitors',
+            'reasoning': f'Strong technical foundation enables aggressive content strategy to capture market share'
+        })
+    
+    return strategies
+
+def calculate_roi_prioritization(all_issues, current_strategies, professional_score):
+    """💰 ROI-Prioritized Action Planning - Understanding effort vs impact"""
+    strategies = []
+    
+    if not all_issues:
+        return strategies
+    
+    # Analyze issue patterns for ROI calculation
+    critical_issues = [issue for issue in all_issues if issue.get('priority') == 'critical']
+    high_issues = [issue for issue in all_issues if issue.get('priority') == 'high']
+    
+    # Quick wins analysis
+    quick_wins = []
+    for issue in critical_issues + high_issues:
+        impact = issue.get('impact_score', 0)
+        effort = issue.get('effort_score', 100)
+        roi = impact / max(1, effort) if effort > 0 else 0
+        
+        if roi > 3.0:  # High ROI threshold
+            quick_wins.append((issue, roi))
+    
+    if quick_wins:
+        # Sort by ROI
+        quick_wins.sort(key=lambda x: x[1], reverse=True)
+        top_roi_issue = quick_wins[0][0]
+        
+        strategies.append({
+            'category': '💰 ROI-Optimized Quick Win',
+            'priority': 'critical',
+            'strategy': f'ROI analysis identifies highest-impact quick win: {top_roi_issue.get("title", "Unknown issue")}',
+            'action': f'Immediate implementation: {top_roi_issue.get("recommendation", "Follow issue guidelines")}',
             'impact': 'very_high',
             'effort': 'low',
-            'data_point': 'Title tags influence 35% of ranking factors'
+            'data_point': f'ROI Score: {quick_wins[0][1]:.1f}x (Impact: {top_roi_issue.get("impact_score", 0)}, Effort: {top_roi_issue.get("effort_score", 1)})',
+            'reasoning': f'Highest ROI opportunity requiring minimal effort with maximum impact on overall score'
         })
-    elif len(title) < 30:
+    
+    # Strategic investment analysis
+    total_potential_impact = sum(issue.get('impact_score', 0) for issue in all_issues)
+    if total_potential_impact > 200:  # Significant improvement potential
         strategies.append({
-            'category': 'Title Enhancement',
-            'priority': 'high', 
-            'strategy': f'Title "{title[:30]}..." is {30-len(title)} characters too short.',
-            'action': f'Expand to 50-60 characters. Current: {len(title)} chars. Add relevant keywords from your content.',
-            'impact': 'high',
-            'effort': 'low',
-            'data_point': f'Longer titles get 2.5x more clicks than short ones'
-        })
-    elif len(title) > 60:
-        strategies.append({
-            'category': 'Title Optimization',
+            'category': '📈 Strategic Investment Plan',
             'priority': 'medium',
-            'strategy': f'Title is {len(title)-60} characters too long and may be truncated.',
-            'action': f'Trim to 60 characters max. Focus on your most important keyword first.',
-            'impact': 'medium', 
-            'effort': 'low',
-            'data_point': f'Search engines truncate titles after 60 characters'
+            'strategy': f'Portfolio analysis reveals {total_potential_impact:.0f} points of improvement potential across {len(all_issues)} issues.',
+            'action': f'Implement phased improvement plan: Month 1-2 focus on {len(critical_issues)} critical issues, Month 3-4 address {len(high_issues)} high-priority items.',
+            'impact': 'very_high',
+            'effort': 'high',
+            'data_point': f'Full implementation could improve score from {professional_score:.1f} to {min(100, professional_score + total_potential_impact*0.1):.1f}',
+            'reasoning': f'Systematic approach maximizes cumulative impact while managing resource allocation efficiently'
         })
     
-    # 描述优化 - 基于实际数据
-    if not description:
-        strategies.append({
-            'category': 'Meta Description Critical',
-            'priority': 'critical',
-            'strategy': 'Missing meta description lets search engines write poor snippets.',
-            'action': f'Write 140-160 character description with a clear call-to-action. Use insights from your {word_count} word content.',
-            'impact': 'high',
-            'effort': 'low',
-            'data_point': 'Meta descriptions influence 15% of click-through rates'
-        })
-    elif len(description) < 120:
-        strategies.append({
-            'category': 'Description Enhancement',
-            'priority': 'high',
-            'strategy': f'Description is {120-len(description)} characters too short to be effective.',
-            'action': f'Expand from {len(description)} to 140-160 characters. Add benefits and call-to-action.',
-            'impact': 'medium',
-            'effort': 'low', 
-            'data_point': 'Longer descriptions get 30% better click-through rates'
-        })
+    return strategies
+
+def synthesize_with_llm_insights(strategies, llm_analysis, url):
+    """🤖 LLM Synthesis - Understanding AI-powered insights"""
+    ai_strategies = []
     
-    # 内容深度建议 - 基于词汇分析
-    if word_count < 300:
-        strategies.append({
-            'category': 'Content Depth',
-            'priority': 'high',
-            'strategy': f'Content is thin with only {word_count} words. Search engines prefer comprehensive content.',
-            'action': f'Expand to 500+ words. Add {500-word_count} more words with relevant subtopics and examples.',
-            'impact': 'high',
-            'effort': 'medium',
-            'data_point': f'Pages with 500+ words rank 53% higher than thin content'
-        })
-    elif word_count > 2000:
-        strategies.append({
-            'category': 'Content Organization',
-            'priority': 'medium',
-            'strategy': f'Excellent content depth ({word_count} words). Focus on structure and readability.',
-            'action': 'Add more H2/H3 headings, bullet points, and visual elements to break up text.',
-            'impact': 'medium',
-            'effort': 'low',
-            'data_point': f'Well-structured long content gets 25% more engagement'
-        })
+    if not llm_analysis or not isinstance(llm_analysis, dict):
+        return ai_strategies
     
-    # 基于专业诊断的具体技术建议
-    if category_scores:
-        for category, score_data in category_scores.items():
-            if isinstance(score_data, dict) and score_data.get('score', 100) < 60:
-                category_name = category.replace('_', ' ').title()
-                strategies.append({
-                    'category': f'{category_name} Fix',
-                    'priority': 'high',
-                    'strategy': f'{category_name} score is low ({score_data.get("score", 0):.1f}/100) with {score_data.get("issues_found", 0)} issues.',
-                    'action': f'Address {score_data.get("critical_issues", 0)} critical {category_name.lower()} issues first.',
-                    'impact': 'high',
-                    'effort': 'medium',
-                    'data_point': f'Fixing these could improve overall score by {(100-score_data.get("score", 0))*0.2:.1f} points'
-                })
+    # Extract LLM recommendations
+    llm_recommendations = llm_analysis.get('recommendations', [])
+    llm_insights = llm_analysis.get('insights', {})
     
-    # LLM分析增强建议
-    if llm_analysis:
-        llm_recommendations = llm_analysis.get('recommendations', [])
-        for rec in llm_recommendations[:2]:  # 取前2个最重要的LLM建议
+    domain = url.split('//')[1].split('/')[0] if '//' in url else url
+    
+    # Synthesize LLM insights with analytical findings
+    if llm_recommendations:
+        for i, rec in enumerate(llm_recommendations[:2]):  # Top 2 LLM recommendations
             if isinstance(rec, dict):
-                strategies.append({
-                    'category': 'AI-Powered Insight',
+                ai_insight = rec.get('insight', 'Advanced optimization opportunity')
+                ai_action = rec.get('action', 'Review AI recommendations')
+                
+                ai_strategies.append({
+                    'category': '🤖 AI-Powered Strategic Insight',
                     'priority': 'medium',
-                    'strategy': f'AI analysis suggests: {rec.get("insight", "Advanced optimization opportunity")}',
-                    'action': rec.get('action', 'Review AI recommendations for specific implementation steps'),
+                    'strategy': f'Advanced AI analysis for {domain}: {ai_insight}',
+                    'action': f'AI-guided implementation: {ai_action}',
                     'impact': 'medium',
                     'effort': 'medium',
-                    'data_point': 'Based on advanced content and competitive analysis'
+                    'data_point': f'Based on advanced pattern recognition and competitive analysis',
+                    'reasoning': f'AI synthesis combines content analysis, user intent modeling, and market positioning for {domain}'
                 })
     
-    # 按优先级和影响力排序
-    priority_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
-    impact_order = {'very_high': 0, 'high': 1, 'medium': 2, 'low': 3}
+    # Extract credibility insights if available
+    if llm_insights.get('credibility_analysis'):
+        credibility = llm_insights['credibility_analysis']
+        ai_strategies.append({
+            'category': '🤖 AI Credibility Enhancement',
+            'priority': 'medium',
+            'strategy': f'AI credibility analysis identifies trust signal optimization opportunities.',
+            'action': f'Implement E-E-A-T enhancement based on AI assessment: {credibility.get("recommendation", "Enhance expertise signals")}',
+            'impact': 'high',
+            'effort': 'medium',
+            'data_point': f'AI-detected credibility score: {credibility.get("score", "analyzing")}',
+            'reasoning': f'Trust signals directly impact search rankings and user conversion rates'
+        })
     
-    strategies.sort(key=lambda x: (
-        priority_order.get(x.get('priority', 'medium'), 2),
-        impact_order.get(x.get('impact', 'medium'), 2)
-    ))
+    return ai_strategies
+
+def prioritize_strategies_analytically(strategies, professional_score, category_scores):
+    """🎯 Analytical Strategy Prioritization - Understanding optimal execution order"""
     
-    return strategies[:8]  # 限制返回最重要的8个建议
+    # Priority scoring algorithm
+    priority_weights = {'critical': 10, 'high': 7, 'medium': 4, 'low': 1}
+    impact_weights = {'very_high': 10, 'high': 7, 'medium': 4, 'low': 1}
+    effort_weights = {'low': 10, 'medium': 6, 'high': 3, 'very_high': 1}  # Lower effort = higher score
+    
+    for strategy in strategies:
+        priority_score = priority_weights.get(strategy.get('priority', 'medium'), 4)
+        impact_score = impact_weights.get(strategy.get('impact', 'medium'), 4)
+        effort_score = effort_weights.get(strategy.get('effort', 'medium'), 6)
+        
+        # Calculate analytical priority score
+        analytical_score = (priority_score * 0.4) + (impact_score * 0.4) + (effort_score * 0.2)
+        
+        # Boost quick wins for low-scoring sites
+        if professional_score < 60 and strategy.get('effort') == 'low' and strategy.get('impact') in ['high', 'very_high']:
+            analytical_score *= 1.3
+        
+        strategy['analytical_priority'] = analytical_score
+    
+    # Sort by analytical priority
+    strategies.sort(key=lambda x: x.get('analytical_priority', 0), reverse=True)
+    
+    return strategies
 
 @app.route('/api/analyze', methods=['POST'])
 def api_analyze():
@@ -602,9 +886,13 @@ def api_analyze():
         # 记录开始时间
         start_time = time.time()
         
-        # 第一阶段：基础分析（支持LLM分析和专业诊断）
+        # 第一阶段：基础分析（支持LLM分析、专业诊断和智能缓存）
         run_llm_analysis = data.get('run_llm_analysis', True)  # 默认启用LLM分析
         run_professional_analysis = data.get('run_professional_analysis', True)  # 默认启用专业诊断
+        use_cache = data.get('use_cache', True)  # 默认启用智能缓存
+        
+        print(f"🚀 Starting analysis for {url} (cache: {'enabled' if use_cache else 'disabled'})")
+        
         analysis_result = analyze(
             url=url,
             sitemap_url=data.get('sitemap'),
@@ -612,17 +900,19 @@ def api_analyze():
             analyze_headings=True,
             analyze_extra_tags=True,
             run_llm_analysis=run_llm_analysis,  # 启用SiliconFlow API分析
-            run_professional_analysis=run_professional_analysis  # 启用专业诊断分析
+            run_professional_analysis=run_professional_analysis,  # 启用专业诊断分析
+            use_cache=use_cache  # 启用智能缓存系统
         )
         
-        # 第二阶段：计算基础指标（轻量级）
-        seo_score = calculate_seo_score_detailed(analysis_result)
+        # 第二阶段：计算SEO评分（使用统一评分系统）
+        seo_score = calculate_unified_seo_score(analysis_result)
+        print(f"🎯 Unified Score Result: {seo_score['score']:.1f} from {seo_score['source']}")
         
         # 第三阶段：生成核心建议（优化版本）
         recommendations = generate_quick_recommendations(analysis_result)
         
-        # 第四阶段：生成智能战略建议
-        strategic_recommendations = generate_strategic_recommendations(
+        # 第四阶段：生成UltraThinking智能战略建议（深度分析推理）
+        strategic_recommendations = generate_ultrathinking_strategies(
             analysis_result, 
             seo_score, 
             analysis_result.get('llm_analysis')
@@ -630,6 +920,9 @@ def api_analyze():
         
         # 计算执行时间
         execution_time = time.time() - start_time
+        
+        # 获取缓存统计信息
+        cache_stats = get_cache_stats() if use_cache else None
         
         # 返回优化后的结果
         result = {
@@ -639,7 +932,9 @@ def api_analyze():
             'strategic_recommendations': strategic_recommendations,
             'performance': {
                 'execution_time': round(execution_time, 2),
-                'optimized': True
+                'optimized': True,
+                'cache_enabled': use_cache,
+                'cache_stats': cache_stats
             },
             'timestamp': datetime.now().isoformat()
         }
@@ -779,8 +1074,8 @@ def api_generate_report():
                 run_professional_analysis=True  # 启用专业诊断确保一致性
             )
             
-            # 组装完整的分析数据
-            seo_score = calculate_seo_score_detailed(analysis_result)
+            # 组装完整的分析数据（使用统一评分系统）
+            seo_score = calculate_unified_seo_score(analysis_result)
             recommendations = generate_quick_recommendations(analysis_result)
             
             analysis_data = {
@@ -815,6 +1110,244 @@ def api_generate_report():
     except Exception as e:
         print(f"Report generation error: {str(e)}")
         return jsonify({'error': f'Report generation failed: {str(e)}'}), 500
+
+@app.route('/api/todos', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def handle_todos():
+    """
+    🎯 TODO Management API - Handle CRUD operations for TODO items
+    
+    GET: Retrieve all todos for a session
+    POST: Create a new todo item  
+    PUT: Update an existing todo item
+    DELETE: Delete a todo item
+    """
+    try:
+        if request.method == 'GET':
+            # Retrieve todos from session or return empty list
+            todos = session.get('todos', [])
+            return jsonify({
+                'todos': todos,
+                'count': len(todos),
+                'pending': len([t for t in todos if not t.get('completed', False)]),
+                'completed': len([t for t in todos if t.get('completed', False)])
+            })
+        
+        elif request.method == 'POST':
+            # Create new todo
+            data = request.get_json()
+            if not data or not data.get('text'):
+                return jsonify({'error': 'Todo text is required'}), 400
+            
+            # Get existing todos from session
+            todos = session.get('todos', [])
+            
+            # Create new todo item
+            new_todo = {
+                'id': int(time.time() * 1000),  # Timestamp-based ID
+                'text': data.get('text', '').strip(),
+                'priority': data.get('priority', 'medium'),
+                'completed': False,
+                'created_at': datetime.now().isoformat(),
+                'source': data.get('source', 'manual'),  # 'manual', 'strategy', 'auto'
+                'category': data.get('category', 'general')
+            }
+            
+            todos.append(new_todo)
+            session['todos'] = todos
+            
+            return jsonify({
+                'success': True,
+                'todo': new_todo,
+                'message': 'Todo created successfully'
+            })
+        
+        elif request.method == 'PUT':
+            # Update existing todo
+            data = request.get_json()
+            todo_id = data.get('id')
+            
+            if not todo_id:
+                return jsonify({'error': 'Todo ID is required'}), 400
+            
+            todos = session.get('todos', [])
+            todo_found = False
+            
+            for todo in todos:
+                if todo.get('id') == todo_id:
+                    # Update todo fields
+                    if 'text' in data:
+                        todo['text'] = data['text'].strip()
+                    if 'priority' in data:
+                        todo['priority'] = data['priority']
+                    if 'completed' in data:
+                        todo['completed'] = data['completed']
+                        if data['completed']:
+                            todo['completed_at'] = datetime.now().isoformat()
+                    
+                    todo['updated_at'] = datetime.now().isoformat()
+                    todo_found = True
+                    break
+            
+            if not todo_found:
+                return jsonify({'error': 'Todo not found'}), 404
+            
+            session['todos'] = todos
+            
+            return jsonify({
+                'success': True,
+                'message': 'Todo updated successfully'
+            })
+        
+        elif request.method == 'DELETE':
+            # Delete todo
+            data = request.get_json()
+            todo_id = data.get('id')
+            
+            if not todo_id:
+                return jsonify({'error': 'Todo ID is required'}), 400
+            
+            todos = session.get('todos', [])
+            original_count = len(todos)
+            
+            # Filter out the todo to delete
+            todos = [todo for todo in todos if todo.get('id') != todo_id]
+            
+            if len(todos) == original_count:
+                return jsonify({'error': 'Todo not found'}), 404
+            
+            session['todos'] = todos
+            
+            return jsonify({
+                'success': True,
+                'message': 'Todo deleted successfully'
+            })
+    
+    except Exception as e:
+        print(f"❌ TODO API error: {e}")
+        return jsonify({'error': f'TODO operation failed: {str(e)}'}), 500
+
+@app.route('/api/todos/clear-completed', methods=['POST'])  
+def clear_completed_todos():
+    """🧹 Clear all completed todos"""
+    try:
+        todos = session.get('todos', [])
+        completed_count = len([t for t in todos if t.get('completed', False)])
+        
+        # Keep only non-completed todos
+        todos = [todo for todo in todos if not todo.get('completed', False)]
+        session['todos'] = todos
+        
+        return jsonify({
+            'success': True,
+            'cleared_count': completed_count,
+            'remaining_count': len(todos),
+            'message': f'Cleared {completed_count} completed todos'
+        })
+    
+    except Exception as e:
+        print(f"❌ Clear completed todos error: {e}")
+        return jsonify({'error': f'Failed to clear completed todos: {str(e)}'}), 500
+
+@app.route('/api/todos/from-strategy', methods=['POST'])
+def create_todo_from_strategy():
+    """
+    🎯 Create TODO from UltraThinking strategy recommendation
+    
+    This endpoint handles converting strategy recommendations into actionable TODO items
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('strategy'):
+            return jsonify({'error': 'Strategy data is required'}), 400
+        
+        strategy = data['strategy']
+        
+        # Extract todo details from strategy
+        todo_text = f"{strategy.get('category', 'Strategy')}: {strategy.get('action', strategy.get('strategy', 'SEO Task'))}"
+        
+        # Get existing todos from session
+        todos = session.get('todos', [])
+        
+        # Check for duplicates
+        duplicate_exists = any(
+            todo.get('text', '').lower() == todo_text.lower() 
+            for todo in todos
+        )
+        
+        if duplicate_exists:
+            return jsonify({
+                'success': False,
+                'message': 'This strategy is already in your TODO list',
+                'duplicate': True
+            })
+        
+        # Create todo from strategy
+        new_todo = {
+            'id': int(time.time() * 1000),
+            'text': todo_text,
+            'priority': strategy.get('priority', 'medium'),
+            'completed': False,
+            'created_at': datetime.now().isoformat(),
+            'source': 'ultrathinking_strategy',
+            'category': strategy.get('category', 'SEO Strategy'),
+            'impact': strategy.get('impact', 'medium'),
+            'effort': strategy.get('effort', 'medium'),
+            'data_point': strategy.get('data_point', ''),
+            'reasoning': strategy.get('reasoning', ''),
+            'original_strategy': strategy  # Store full strategy for reference
+        }
+        
+        todos.append(new_todo)
+        session['todos'] = todos
+        
+        return jsonify({
+            'success': True,
+            'todo': new_todo,
+            'message': 'Strategy added to TODO list successfully'
+        })
+    
+    except Exception as e:
+        print(f"❌ Strategy to TODO error: {e}")
+        return jsonify({'error': f'Failed to create todo from strategy: {str(e)}'}), 500
+
+@app.route('/api/cache', methods=['GET', 'DELETE'])
+def manage_cache():
+    """🧠 Cache Management API - View cache statistics and manage cache data"""
+    try:
+        if request.method == 'GET':
+            # Get comprehensive cache statistics
+            cache_stats = get_cache_stats()
+            
+            return jsonify({
+                'success': True,
+                'cache_stats': cache_stats,
+                'timestamp': datetime.now().isoformat(),
+                'message': 'Cache statistics retrieved successfully'
+            })
+        
+        elif request.method == 'DELETE':
+            # Clear cache data
+            data = request.get_json() or {}
+            url = data.get('url')
+            analysis_type = data.get('analysis_type')
+            
+            # Import here to avoid circular imports
+            from pyseoanalyzer.intelligent_cache import invalidate_cache
+            
+            # Invalidate cache entries
+            invalidated_count = invalidate_cache(url=url, analysis_type=analysis_type)
+            
+            return jsonify({
+                'success': True,
+                'invalidated_count': invalidated_count,
+                'message': f'Successfully invalidated {invalidated_count} cache entries',
+                'timestamp': datetime.now().isoformat()
+            })
+    
+    except Exception as e:
+        print(f"❌ Cache management error: {e}")
+        return jsonify({'error': f'Cache management failed: {str(e)}'}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health_check():

@@ -1,1 +1,2 @@
-部署应用程序
+上传到GitHub配置：JasonRobertDestiny                                                                                            │
+johnrobertdestiny@gmail.com、

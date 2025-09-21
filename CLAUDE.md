@@ -36,35 +36,27 @@ pytest -v
 # Run with coverage
 pytest --cov=pyseoanalyzer
 
-# Run tests with coverage report
+# Run tests with coverage report  
 pytest --cov=pyseoanalyzer --cov-report=html
 
 # Run specific test modules
 pytest tests/test_siliconflow_integration.py -v
 pytest tests/test_llm_analyst.py -v
 
+# Run tests for caching system
+pytest tests/test_intelligent_cache.py -v
+
+# Run tests for professional diagnostics
+pytest tests/test_professional_diagnostics.py -v
+
 # Clean up test files after testing
+# Remove temporary test files and directories
 rm -rf test_output/
 rm -f test_*.html
 rm -f test_*.xml
 rm -f *.tmp
 find . -name "__pycache__" -type d -exec rm -rf {} +
 find . -name "*.pyc" -delete
-```
-
-### Linting and Code Quality
-```bash
-# Run ruff linting (recommended)
-ruff check pyseoanalyzer/
-
-# Fix auto-fixable issues
-ruff check --fix pyseoanalyzer/
-
-# Format code with ruff
-ruff format pyseoanalyzer/
-
-# Check type hints with mypy (if available)
-mypy pyseoanalyzer/ --ignore-missing-imports
 ```
 
 ### Docker Development
@@ -79,9 +71,17 @@ docker run --rm python-seo-analyzer http://example.com/
 docker run --rm -e ANTHROPIC_API_KEY="your_key" python-seo-analyzer http://example.com/ --run-llm-analysis
 # Or use Silicon Flow API
 docker run --rm -e SILICONFLOW_API_KEY="your_key" python-seo-analyzer http://example.com/ --run-llm-analysis
-
-# Run web interface in Docker
-docker run -p 5000:5000 --rm -e ANTHROPIC_API_KEY="your_key" python-seo-analyzer
+```
+### Code Quality Guidelines
+```
+# Critical development patterns to follow:
+# - All HTTP requests must implement retry logic with attempt limits
+# - Array/loop operations must consider performance at scale  
+# - User input must have capacity limits (total and individual)
+# - Interface changes must maintain backward compatibility
+# - Data operations must preserve permissions and access controls
+# - Batch operations must ensure consistency across all items
+# - Exception scenarios must have explicit error handling
 ```
 
 ### CLI Usage
@@ -254,11 +254,21 @@ find . -name "*.py" -not -path "./venv/*" -exec python -m py_compile {} \;
 - Async/await support for concurrent analysis
 - Automatic fallback and error handling
 
-**report_generator.py** - Comprehensive report generation:
-- Multi-format report generation (HTML, JSON, CSV, TXT)
-- Professional styling and formatting
-- Data visualization and charts
-- Executive summaries and detailed analytics
+**intelligent_cache.py** - Advanced caching system:
+- Multi-level caching (memory + disk) with content-aware invalidation
+- Performance metrics and cache optimization
+- Cache compression and intelligent warming
+- Fixes analysis timing inconsistencies
+
+**professional_diagnostics.py** - Professional SEO diagnostics:
+- Advanced diagnostic algorithms for SEO issues
+- Professional-grade analysis reporting
+- Comprehensive technical SEO evaluation
+
+**report_generator.py** - Multi-format report generation:
+- HTML, JSON, CSV, and TXT report formats
+- Professional styling and visualizations
+- Template-based report generation system
 
 ### Key Design Patterns
 
@@ -415,27 +425,29 @@ python -m pyseoanalyzer.api
 ### Project Structure
 ```
 pyseoanalyzer/
-├── __init__.py          # Package initialization and version
-├── __main__.py          # CLI entry point and argument parsing
-├── analyzer.py          # Main orchestration logic
-├── website.py           # Website crawling and sitemap handling
-├── page.py              # Individual page analysis
-├── http_client.py       # HTTP client wrapper (urllib3)
-├── llm_analyst.py       # Anthropic Claude integration
-├── report_generator.py      # Comprehensive report generation
-├── siliconflow_llm.py   # Silicon Flow API integration
-├── api.py               # Flask web interface
-├── automation.py        # Scheduled analysis system
-├── decision_engine.py   # AI-powered recommendations
-├── enhanced_llm_analyst.py  # Advanced multi-source analysis
-├── google_integrator.py     # Google APIs integration
-├── seo_optimizer.py         # Actionable optimization plans
-├── sitemap_generator.py     # XML sitemap generation
-├── stopwords.py             # Text processing utilities
-└── templates/               # Web interface assets
-    ├── index.html          # Main dashboard
-    ├── seo_agent.js        # Frontend JavaScript
-    └── seo_styles.css      # Styling and themes
+├── __init__.py                    # Package initialization and version
+├── __main__.py                    # CLI entry point and argument parsing
+├── analyzer.py                    # Main orchestration logic
+├── website.py                     # Website crawling and sitemap handling
+├── page.py                        # Individual page analysis
+├── http_client.py                 # HTTP client wrapper (urllib3)
+├── llm_analyst.py                 # Anthropic Claude integration
+├── siliconflow_llm.py             # Silicon Flow API integration
+├── api.py                         # Flask web interface
+├── automation.py                  # Scheduled analysis system
+├── decision_engine.py             # AI-powered recommendations
+├── enhanced_llm_analyst.py        # Advanced multi-source analysis
+├── google_integrator.py           # Google APIs integration
+├── seo_optimizer.py               # Actionable optimization plans
+├── sitemap_generator.py           # XML sitemap generation
+├── stopwords.py                   # Text processing utilities
+├── intelligent_cache.py           # Advanced caching system (NEW)
+├── professional_diagnostics.py    # Professional SEO diagnostics (NEW)
+├── report_generator.py            # Multi-format report generation (NEW)
+└── templates/                     # Web interface assets
+    ├── index.html                # Main dashboard
+    ├── seo_agent.js              # Frontend JavaScript
+    └── seo_styles.css            # Styling and themes
 ```
 
 ### Common Development Patterns
@@ -455,4 +467,17 @@ pyseoanalyzer/
 - **Memory**: Content hashing prevents duplicate processing
 - **Network**: Connection pooling via urllib3, configurable timeouts
 - **Concurrency**: Page analysis is parallelizable, LLM calls support async
-- **Caching**: Template caching for web interface, optional result caching
+- **Caching**: Multi-level intelligent caching system with compression
+- **Optimization**: Cache warming, content-aware invalidation, performance metrics tracking
+
+### Cache Management
+```bash
+# Cache is automatically managed but can be controlled:
+# Cache location: .seo_cache/ directory
+# Clear cache manually if needed:
+rm -rf .seo_cache/
+
+# Monitor cache performance via logs:
+python -c "import logging; logging.basicConfig(level=logging.DEBUG)"
+python-seo-analyzer http://example.com/
+```

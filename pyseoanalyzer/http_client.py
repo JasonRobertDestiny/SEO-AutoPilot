@@ -20,33 +20,24 @@ class Http:
         )
     
     def get(self, url):
-        """Perform HTTP GET request with cache-busting headers"""
+        """Perform HTTP GET request with improved compatibility"""
         try:
-            # Add timestamp to URL to prevent caching issues
-            cache_buster = f"?_t={int(time.time() * 1000)}"
-            if '?' in url:
-                url_with_cache_buster = f"{url}&_t={int(time.time() * 1000)}"
-            else:
-                url_with_cache_buster = f"{url}{cache_buster}"
-            
-            # Additional cache-busting headers per request
+            # Use more standard headers that are less likely to be blocked
             headers = {
-                'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-                'Pragma': 'no-cache',
-                'Expires': '0',
-                'If-Modified-Since': 'Thu, 01 Jan 1970 00:00:00 GMT',
-                'If-None-Match': '*'
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
             }
             
-            response = self.http.request('GET', url_with_cache_buster, headers=headers)
+            response = self.http.request('GET', url, headers=headers)
             return response
         except Exception as e:
-            # Fallback: try original URL without cache buster if the modified URL fails
+            # Fallback: try with minimal headers if the first request fails
             try:
                 headers = {
-                    'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-                    'Pragma': 'no-cache',
-                    'Expires': '0'
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 }
                 response = self.http.request('GET', url, headers=headers)
                 return response

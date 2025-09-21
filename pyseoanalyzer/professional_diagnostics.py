@@ -13,7 +13,9 @@ import requests
 import asyncio
 import os
 import logging
-from datetime import datetime
+import time
+import threading
+from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -25,6 +27,489 @@ from .http_client import http
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+
+class RateLimiter:
+    """
+    🚦 Thread-safe rate limiter with intelligent backoff and quota management
+    
+    Designed specifically for Google PageSpeed Insights API:
+    - Free tier: 5 requests per second, 25,000 requests per day
+    - Implements exponential backoff on 429 errors
+    - Tracks daily quota usage
+    - Provides graceful degradation options
+    """
+    
+    def __init__(self, requests_per_second: float = 4.5, daily_quota: int = 24000):
+        """
+        Initialize rate limiter with conservative defaults
+        
+        Args:
+            requests_per_second: Max requests per second (default 4.5 to stay under 5/sec limit)
+            daily_quota: Max requests per day (default 24000 to stay under 25000 limit)
+        """
+        self.requests_per_second = requests_per_second
+        self.daily_quota = daily_quota
+        self.min_interval = 1.0 / requests_per_second
+        
+        # Thread safety
+        self._lock = threading.Lock()
+        
+        # Request tracking
+        self._last_request_time = 0.0
+        self._daily_requests = {}  # date -> count
+        self._backoff_until = 0.0  # timestamp when backoff ends
+        self._consecutive_failures = 0
+        
+        # Statistics
+        self._total_requests = 0
+        self._total_rate_limited = 0
+        self._total_backoff_time = 0.0
+        
+        print(f"🚦 PageSpeed Rate Limiter initialized: {requests_per_second} req/sec, {daily_quota} daily quota")
+    
+    def can_make_request(self) -> Tuple[bool, str, float]:
+        """
+        Check if a request can be made now
+        
+        Returns:
+            (can_proceed, reason, wait_time)
+        """
+        with self._lock:
+            now = time.time()
+            today = datetime.now().date()
+            
+            # Check daily quota
+            daily_count = self._daily_requests.get(today, 0)
+            if daily_count >= self.daily_quota:
+                return False, f"Daily quota exceeded ({daily_count}/{self.daily_quota})", 86400  # Wait until tomorrow
+            
+            # Check backoff period
+            if now < self._backoff_until:
+                wait_time = self._backoff_until - now
+                return False, f"In backoff period (failures: {self._consecutive_failures})", wait_time
+            
+            # Check rate limit
+            time_since_last = now - self._last_request_time
+            if time_since_last < self.min_interval:
+                wait_time = self.min_interval - time_since_last
+                return False, f"Rate limit: {self.requests_per_second} req/sec", wait_time
+            
+            return True, "OK", 0.0
+    
+    def acquire(self, timeout: float = 30.0) -> bool:
+        """
+        Acquire permission to make a request, with automatic waiting
+        
+        Args:
+            timeout: Maximum time to wait for permission
+            
+        Returns:
+            True if permission granted, False if timeout
+        """
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            can_proceed, reason, wait_time = self.can_make_request()
+            
+            if can_proceed:
+                with self._lock:
+                    self._last_request_time = time.time()
+                    today = datetime.now().date()
+                    self._daily_requests[today] = self._daily_requests.get(today, 0) + 1
+                    self._total_requests += 1
+                    
+                    print(f"🟢 PageSpeed request approved (daily: {self._daily_requests[today]}/{self.daily_quota})")
+                    return True
+            
+            if wait_time > timeout - (time.time() - start_time):
+                print(f"🔴 PageSpeed request timeout after {timeout}s (reason: {reason})")
+                return False
+            
+            if wait_time > 0:
+                print(f"🟡 PageSpeed rate limit: waiting {wait_time:.1f}s ({reason})")
+                time.sleep(min(wait_time, 1.0))  # Sleep in small chunks
+            else:
+                time.sleep(0.1)  # Small delay to prevent busy waiting
+        
+        print(f"🔴 PageSpeed request timeout after {timeout}s")
+        return False
+    
+    def record_success(self):
+        """Record a successful request"""
+        with self._lock:
+            self._consecutive_failures = 0
+            self._backoff_until = 0.0
+            print(f"✅ PageSpeed request successful (total: {self._total_requests})")
+    
+    def record_failure(self, error_code: int = 429):
+        """
+        Record a failed request and calculate backoff
+        
+        Args:
+            error_code: HTTP error code
+        """
+        with self._lock:
+            self._consecutive_failures += 1
+            self._total_rate_limited += 1
+            
+            if error_code == 429:
+                # Exponential backoff: 2^failures seconds, max 300 seconds (5 minutes)
+                backoff_delay = min(300, 2 ** self._consecutive_failures)
+                self._backoff_until = time.time() + backoff_delay
+                self._total_backoff_time += backoff_delay
+                
+                print(f"🔴 PageSpeed 429 error: backing off {backoff_delay}s (failure #{self._consecutive_failures})")
+            else:
+                # Other errors: shorter backoff
+                backoff_delay = min(60, self._consecutive_failures * 5)
+                self._backoff_until = time.time() + backoff_delay
+                
+                print(f"🔴 PageSpeed error {error_code}: backing off {backoff_delay}s")
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get rate limiter statistics"""
+        with self._lock:
+            today = datetime.now().date()
+            return {
+                'total_requests': self._total_requests,
+                'daily_requests': self._daily_requests.get(today, 0),
+                'daily_quota': self.daily_quota,
+                'quota_remaining': self.daily_quota - self._daily_requests.get(today, 0),
+                'consecutive_failures': self._consecutive_failures,
+                'total_rate_limited': self._total_rate_limited,
+                'total_backoff_time': self._total_backoff_time,
+                'backoff_active': time.time() < self._backoff_until,
+                'backoff_remaining': max(0, self._backoff_until - time.time())
+            }
+
+
+class PageSpeedAPIManager:
+    """
+    🚀 Intelligent PageSpeed API manager with rate limiting and graceful fallbacks
+    
+    Features:
+    - Automatic rate limiting and backoff
+    - Graceful degradation to basic performance tests
+    - Request caching to minimize API usage
+    - Comprehensive error handling and logging
+    """
+    
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.getenv('GOOGLE_PAGESPEED_API_KEY')
+        self.rate_limiter = RateLimiter()
+        self.cache = {}  # Simple in-memory cache
+        self.cache_duration = 3600  # 1 hour cache
+        
+        # Performance thresholds for fallback testing
+        self.performance_thresholds = {
+            'excellent': 1.5,   # Under 1.5s
+            'good': 3.0,        # Under 3.0s  
+            'fair': 5.0,        # Under 5.0s
+            'poor': float('inf') # 5.0s+
+        }
+        
+        print(f"🚀 PageSpeed API Manager initialized (API key: {'✓' if self.api_key else '✗'})")
+    
+    def _get_cache_key(self, url: str, strategy: str) -> str:
+        """Generate cache key for URL and strategy"""
+        return f"{url}:{strategy}"
+    
+    def _is_cache_valid(self, cache_entry: Dict) -> bool:
+        """Check if cache entry is still valid"""
+        if not cache_entry:
+            return False
+        return time.time() - cache_entry.get('timestamp', 0) < self.cache_duration
+    
+    def analyze_performance(self, url: str) -> Dict[str, Any]:
+        """
+        Analyze page performance with intelligent API usage and fallbacks
+        
+        Args:
+            url: URL to analyze
+            
+        Returns:
+            Performance analysis results
+        """
+        results = {
+            'mobile': {},
+            'desktop': {},
+            'overall_score': None,
+            'api_available': False,
+            'fallback_used': False,
+            'rate_limit_hit': False,
+            'cache_used': False
+        }
+        
+        print(f"🔍 Starting PageSpeed analysis for: {url}")
+        
+        # Try API requests for both mobile and desktop
+        for strategy in ['mobile', 'desktop']:
+            cache_key = self._get_cache_key(url, strategy)
+            cached_result = self.cache.get(cache_key)
+            
+            # Check cache first
+            if self._is_cache_valid(cached_result):
+                print(f"📋 Using cached PageSpeed data for {strategy}")
+                results[strategy] = cached_result['data']
+                results['cache_used'] = True
+                continue
+            
+            # Try API request
+            api_result = self._try_api_request(url, strategy)
+            
+            if api_result['success']:
+                results[strategy] = api_result['data']
+                results['api_available'] = True
+                
+                # Cache successful result
+                self.cache[cache_key] = {
+                    'data': api_result['data'],
+                    'timestamp': time.time()
+                }
+                print(f"💾 Cached PageSpeed data for {strategy}")
+                
+            else:
+                # API failed, use fallback
+                if api_result.get('rate_limited'):
+                    results['rate_limit_hit'] = True
+                
+                print(f"⚠️ PageSpeed API failed for {strategy}: {api_result.get('error', 'Unknown error')}")
+                results[strategy] = self._fallback_performance_test(url, strategy)
+                results['fallback_used'] = True
+        
+        # Calculate overall score
+        results['overall_score'] = self._calculate_overall_score(results['mobile'], results['desktop'])
+        
+        # Log results summary
+        mobile_score = results['mobile'].get('performance_score', 'N/A')
+        desktop_score = results['desktop'].get('performance_score', 'N/A')
+        print(f"📊 PageSpeed analysis complete: Mobile={mobile_score}, Desktop={desktop_score}, Overall={results['overall_score']}")
+        
+        return results
+    
+    def _try_api_request(self, url: str, strategy: str) -> Dict[str, Any]:
+        """
+        Attempt PageSpeed API request with rate limiting
+        
+        Returns:
+            {'success': bool, 'data': dict, 'error': str, 'rate_limited': bool}
+        """
+        if not self.api_key:
+            return {
+                'success': False,
+                'error': 'No API key available',
+                'rate_limited': False
+            }
+        
+        # Check rate limiter
+        if not self.rate_limiter.acquire(timeout=5.0):
+            stats = self.rate_limiter.get_stats()
+            return {
+                'success': False,
+                'error': f'Rate limit exceeded (daily: {stats["daily_requests"]}/{stats["daily_quota"]})',
+                'rate_limited': True
+            }
+        
+        try:
+            # Make API request
+            base_url = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
+            params = {
+                'url': url,
+                'category': 'performance',
+                'strategy': strategy,
+                'key': self.api_key
+            }
+            
+            print(f"🌐 Making PageSpeed API request: {strategy} for {url}")
+            response = requests.get(base_url, params=params, timeout=30)
+            
+            if response.status_code == 200:
+                self.rate_limiter.record_success()
+                data = response.json()
+                processed_data = self._process_api_response(data, strategy)
+                
+                return {
+                    'success': True,
+                    'data': processed_data,
+                    'rate_limited': False
+                }
+                
+            elif response.status_code == 429:
+                # Rate limited
+                self.rate_limiter.record_failure(429)
+                return {
+                    'success': False,
+                    'error': 'API rate limit exceeded',
+                    'rate_limited': True
+                }
+                
+            else:
+                # Other API error
+                self.rate_limiter.record_failure(response.status_code)
+                return {
+                    'success': False,
+                    'error': f'API error {response.status_code}: {response.reason}',
+                    'rate_limited': False
+                }
+                
+        except requests.exceptions.Timeout:
+            self.rate_limiter.record_failure(408)
+            return {
+                'success': False,
+                'error': 'API request timeout',
+                'rate_limited': False
+            }
+            
+        except Exception as e:
+            self.rate_limiter.record_failure(500)
+            return {
+                'success': False,
+                'error': f'API request failed: {str(e)}',
+                'rate_limited': False
+            }
+    
+    def _process_api_response(self, data: Dict, strategy: str) -> Dict[str, Any]:
+        """Process PageSpeed API response into standardized format"""
+        if not data or 'lighthouseResult' not in data:
+            return {
+                'lcp': None, 'inp': None, 'cls': None,
+                'fcp': None, 'speed_index': None,
+                'performance_score': None, 'strategy': strategy
+            }
+        
+        lighthouse = data['lighthouseResult']
+        audits = lighthouse.get('audits', {})
+        
+        # Extract Core Web Vitals
+        lcp = audits.get('largest-contentful-paint', {}).get('numericValue')
+        inp = audits.get('interaction-to-next-paint', {}).get('numericValue')
+        cls = audits.get('cumulative-layout-shift', {}).get('numericValue')
+        
+        # Additional performance metrics
+        fcp = audits.get('first-contentful-paint', {}).get('numericValue')
+        speed_index = audits.get('speed-index', {}).get('numericValue')
+        
+        # Overall performance score
+        performance_score = lighthouse.get('categories', {}).get('performance', {}).get('score')
+        if performance_score:
+            performance_score = int(performance_score * 100)
+        
+        return {
+            'lcp': lcp,
+            'inp': inp,
+            'cls': cls,
+            'fcp': fcp,
+            'speed_index': speed_index,
+            'performance_score': performance_score,
+            'strategy': strategy,
+            'api_source': True
+        }
+    
+    def _fallback_performance_test(self, url: str, strategy: str) -> Dict[str, Any]:
+        """
+        Fallback performance test when API is unavailable
+        
+        Performs basic timing test and estimates Core Web Vitals
+        """
+        try:
+            print(f"🔄 Running fallback performance test: {strategy} for {url}")
+            
+            # Basic load timing test
+            start_time = time.time()
+            response = http.get(url)
+            load_time = time.time() - start_time
+            
+            # Estimate performance score based on load time
+            if load_time <= self.performance_thresholds['excellent']:
+                estimated_score = 95
+                performance_level = 'excellent'
+            elif load_time <= self.performance_thresholds['good']:
+                estimated_score = 80 - (load_time - 1.5) * 20  # Linear scale
+                performance_level = 'good'
+            elif load_time <= self.performance_thresholds['fair']:
+                estimated_score = 60 - (load_time - 3.0) * 15  # Linear scale
+                performance_level = 'fair'
+            else:
+                estimated_score = max(10, 50 - load_time * 5)  # Punish slow sites
+                performance_level = 'poor'
+            
+            estimated_score = max(10, min(100, int(estimated_score)))
+            
+            # Estimate Core Web Vitals based on load time
+            estimated_lcp = load_time * 1000  # Convert to ms
+            estimated_fcp = load_time * 800   # Slightly faster than LCP
+            estimated_cls = min(0.5, load_time * 0.1)  # Estimate layout shift
+            estimated_inp = min(500, load_time * 100)  # Estimate interaction delay
+            
+            print(f"⏱️ Fallback test complete: {load_time:.2f}s load time, {estimated_score} estimated score ({performance_level})")
+            
+            return {
+                'lcp': estimated_lcp,
+                'inp': estimated_inp,
+                'cls': estimated_cls,
+                'fcp': estimated_fcp,
+                'speed_index': estimated_lcp + 200,  # Rough estimate
+                'performance_score': estimated_score,
+                'strategy': strategy,
+                'api_source': False,
+                'fallback_used': True,
+                'load_time_seconds': load_time,
+                'performance_level': performance_level
+            }
+            
+        except Exception as e:
+            print(f"❌ Fallback performance test failed: {str(e)}")
+            return {
+                'lcp': None,
+                'inp': None,
+                'cls': None,
+                'fcp': None,
+                'speed_index': None,
+                'performance_score': None,
+                'strategy': strategy,
+                'api_source': False,
+                'fallback_used': True,
+                'error': str(e)
+            }
+    
+    def _calculate_overall_score(self, mobile_data: Dict, desktop_data: Dict) -> Optional[float]:
+        """Calculate overall performance score from mobile and desktop data"""
+        mobile_score = mobile_data.get('performance_score')
+        desktop_score = desktop_data.get('performance_score')
+        
+        if mobile_score is None and desktop_score is None:
+            return None
+        elif mobile_score is None:
+            return desktop_score
+        elif desktop_score is None:
+            return mobile_score
+        else:
+            # Mobile-first weighting: 70% mobile, 30% desktop
+            return round(mobile_score * 0.7 + desktop_score * 0.3, 1)
+    
+    def get_api_stats(self) -> Dict[str, Any]:
+        """Get comprehensive API usage statistics"""
+        rate_stats = self.rate_limiter.get_stats()
+        
+        return {
+            'rate_limiter': rate_stats,
+            'cache_entries': len(self.cache),
+            'api_key_configured': bool(self.api_key),
+            'cache_duration_hours': self.cache_duration / 3600
+        }
+
+
+# Global PageSpeed API manager instance
+_pagespeed_manager = None
+
+
+def get_pagespeed_manager() -> PageSpeedAPIManager:
+    """Get singleton PageSpeed API manager instance"""
+    global _pagespeed_manager
+    if _pagespeed_manager is None:
+        _pagespeed_manager = PageSpeedAPIManager()
+    return _pagespeed_manager
 
 
 class PriorityLevel(Enum):
@@ -287,13 +772,31 @@ class ProfessionalSEODiagnostics:
         }
     
     def _check_meta_optimization(self, soup: BeautifulSoup, page_data: Dict = None) -> Dict[str, Any]:
-        """Comprehensive meta tag optimization analysis"""
+        """Comprehensive meta tag optimization analysis with enhanced data integration"""
         score = 100.0
         
-        # Title tag analysis
-        title_tag = soup.find('title')
-        title_text = title_tag.get_text() if title_tag else ""
+        # Use page_data first, fall back to HTML parsing
+        title_text = ""
+        desc_text = ""
         
+        if page_data:
+            # Prioritize extracted metadata from page analysis
+            title_text = page_data.get('title', '')
+            desc_text = page_data.get('description', '')
+            print(f"📊 Using extracted metadata - Title: '{title_text}' ({len(title_text)} chars), Desc: '{desc_text}' ({len(desc_text)} chars)")
+        
+        # Fallback to HTML parsing if no page data
+        if not title_text:
+            title_tag = soup.find('title')
+            title_text = title_tag.get_text().strip() if title_tag else ""
+            print(f"🔍 Fallback HTML parsing - Title: '{title_text}' ({len(title_text)} chars)")
+        
+        if not desc_text:
+            meta_desc = soup.find('meta', attrs={'name': 'description'})
+            desc_text = meta_desc.get('content', '').strip() if meta_desc else ''
+            print(f"🔍 Fallback HTML parsing - Description: '{desc_text}' ({len(desc_text)} chars)")
+        
+        # Title tag analysis - aligned with basic analysis thresholds
         if not title_text:
             self._add_issue(
                 DiagnosticCategory.TECHNICAL_SEO,
@@ -304,30 +807,58 @@ class ProfessionalSEODiagnostics:
                 "Add a descriptive title tag between 30-60 characters"
             )
             score -= 40
-        elif len(title_text) < 30:
+        elif len(title_text) < 10:  # FIXED: Align with basic analysis (was 30)
             self._add_issue(
                 DiagnosticCategory.TECHNICAL_SEO,
                 "Title tag too short",
-                f"Title tag is {len(title_text)} characters, should be 30-60",
+                f"Title tag is {len(title_text)} characters, should be 30-60 for optimal SEO",
                 PriorityLevel.HIGH,
                 70.0, 10.0,
                 "Expand title tag to include relevant keywords and be more descriptive"
             )
             score -= 20
-        elif len(title_text) > 60:
+        elif len(title_text) > 70:  # FIXED: Align with basic analysis (was 60)
             self._add_issue(
                 DiagnosticCategory.TECHNICAL_SEO,
                 "Title tag too long",
-                f"Title tag is {len(title_text)} characters, should be 30-60",
+                f"Title tag is {len(title_text)} characters, should be 30-60 to prevent truncation",
                 PriorityLevel.HIGH,
                 70.0, 10.0,
                 "Shorten title tag to prevent truncation in search results"
             )
             score -= 20
         
-        # Meta description analysis
-        meta_desc = soup.find('meta', attrs={'name': 'description'})
-        desc_text = meta_desc.get('content', '') if meta_desc else ''
+        # Meta description analysis - enhanced with better thresholds
+        if not desc_text:
+            self._add_issue(
+                DiagnosticCategory.TECHNICAL_SEO,
+                "Missing meta description",
+                "Page is missing a meta description",
+                PriorityLevel.HIGH,
+                80.0, 15.0,
+                "Add a compelling meta description between 120-160 characters"
+            )
+            score -= 25
+        elif len(desc_text) < 120:  # ENHANCED: Better threshold for meta descriptions
+            self._add_issue(
+                DiagnosticCategory.TECHNICAL_SEO,
+                "Meta description too short",
+                f"Meta description is {len(desc_text)} characters, should be 120-160",
+                PriorityLevel.MEDIUM,
+                50.0, 15.0,
+                "Expand meta description to better describe page content"
+            )
+            score -= 15
+        elif len(desc_text) > 160:
+            self._add_issue(
+                DiagnosticCategory.TECHNICAL_SEO,
+                "Meta description too long",
+                f"Meta description is {len(desc_text)} characters, should be 120-160",
+                PriorityLevel.MEDIUM,
+                50.0, 10.0,
+                "Shorten meta description to prevent truncation in search results"
+            )
+            score -= 15
         
         if not desc_text:
             self._add_issue(
@@ -439,102 +970,119 @@ class ProfessionalSEODiagnostics:
     
     def _check_core_web_vitals(self, url: str) -> Dict[str, Any]:
         """
-        Check Core Web Vitals using Google PageSpeed Insights API
+        🚀 Enhanced Core Web Vitals analysis with intelligent rate limiting and fallback
+        
+        Uses the new PageSpeedAPIManager for:
+        - Automatic rate limiting and backoff on 429 errors
+        - Intelligent caching to minimize API usage
+        - Graceful fallback to basic performance tests
+        - Comprehensive error handling and logging
         """
         try:
-            # Use environment variable for API key, or make limited requests without key
-            api_key = self.google_pagespeed_api_key or os.getenv('GOOGLE_PAGESPEED_API_KEY')
+            # Use the global PageSpeed API manager
+            pagespeed_manager = get_pagespeed_manager()
             
-            # PageSpeed Insights API endpoint
-            base_url = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
+            print(f"🚀 Starting Core Web Vitals analysis for: {url}")
             
-            # Parameters for both mobile and desktop
-            mobile_params = {
-                'url': url,
-                'category': 'performance',
-                'strategy': 'mobile'
-            }
-            desktop_params = {
-                'url': url,
-                'category': 'performance', 
-                'strategy': 'desktop'
-            }
+            # Get comprehensive performance analysis
+            performance_results = pagespeed_manager.analyze_performance(url)
             
-            if api_key:
-                mobile_params['key'] = api_key
-                desktop_params['key'] = api_key
+            # Extract mobile and desktop results
+            mobile_cwv = performance_results['mobile']
+            desktop_cwv = performance_results['desktop']
+            overall_score = performance_results['overall_score']
             
-            results = {
-                'mobile': self._fetch_pagespeed_data(base_url, mobile_params),
-                'desktop': self._fetch_pagespeed_data(base_url, desktop_params)
-            }
-            
-            # Process results and calculate scores
-            mobile_cwv = self._extract_core_web_vitals(results['mobile'], 'mobile')
-            desktop_cwv = self._extract_core_web_vitals(results['desktop'], 'desktop')
-            
-            # Calculate overall score and add issues
-            overall_score = self._calculate_cwv_score(mobile_cwv, desktop_cwv)
+            # Add diagnostic issues based on thresholds
             self._add_cwv_issues(mobile_cwv, desktop_cwv, url)
             
-            return {
+            # Prepare comprehensive results
+            results = {
                 'mobile': mobile_cwv,
                 'desktop': desktop_cwv,
                 'overall_score': overall_score,
-                'api_available': True
+                'api_available': performance_results['api_available'],
+                'fallback_used': performance_results['fallback_used'],
+                'rate_limit_hit': performance_results['rate_limit_hit'],
+                'cache_used': performance_results['cache_used']
             }
             
-        except Exception as e:
-            logger.warning(f"PageSpeed Insights API unavailable: {str(e)}")
-            # Return fallback with basic timing if possible
-            return self._fallback_performance_check(url)
-    
-    def _fetch_pagespeed_data(self, base_url: str, params: Dict) -> Dict:
-        """Fetch data from PageSpeed Insights API"""
-        try:
-            response = requests.get(base_url, params=params, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            logger.warning(f"PageSpeed API request failed: {str(e)}")
-            return {}
-    
-    def _extract_core_web_vitals(self, data: Dict, strategy: str) -> Dict[str, Any]:
-        """Extract Core Web Vitals metrics from PageSpeed response"""
-        if not data or 'lighthouseResult' not in data:
-            return {
-                'lcp': None, 'inp': None, 'cls': None, 
-                'fcp': None, 'speed_index': None,
-                'performance_score': None, 'strategy': strategy
+            # Log analysis summary
+            api_status = "✓ API" if performance_results['api_available'] else "⚠ Fallback"
+            cache_status = "📋 Cached" if performance_results['cache_used'] else "🆕 Fresh"
+            rate_status = "🔴 Rate Limited" if performance_results['rate_limit_hit'] else "🟢 OK"
+            
+            print(f"📊 Core Web Vitals complete: {api_status}, {cache_status}, {rate_status}")
+            print(f"   Mobile: {mobile_cwv.get('performance_score', 'N/A')}, Desktop: {desktop_cwv.get('performance_score', 'N/A')}, Overall: {overall_score}")
+            
+            # Add API usage information to results for debugging
+            api_stats = pagespeed_manager.get_api_stats()
+            results['api_stats'] = {
+                'daily_requests': api_stats['rate_limiter']['daily_requests'],
+                'quota_remaining': api_stats['rate_limiter']['quota_remaining'],
+                'cache_entries': api_stats['cache_entries'],
+                'backoff_active': api_stats['rate_limiter']['backoff_active']
             }
-        
-        lighthouse = data['lighthouseResult']
-        audits = lighthouse.get('audits', {})
-        
-        # Extract Core Web Vitals
-        lcp = audits.get('largest-contentful-paint', {}).get('numericValue')
-        inp = audits.get('interaction-to-next-paint', {}).get('numericValue') 
-        cls = audits.get('cumulative-layout-shift', {}).get('numericValue')
-        
-        # Additional performance metrics
-        fcp = audits.get('first-contentful-paint', {}).get('numericValue')
-        speed_index = audits.get('speed-index', {}).get('numericValue')
-        
-        # Overall performance score
-        performance_score = lighthouse.get('categories', {}).get('performance', {}).get('score')
-        if performance_score:
-            performance_score = int(performance_score * 100)
-        
-        return {
-            'lcp': lcp,
-            'inp': inp, 
-            'cls': cls,
-            'fcp': fcp,
-            'speed_index': speed_index,
-            'performance_score': performance_score,
-            'strategy': strategy,
-            'raw_data': data  # Store for detailed analysis
-        }
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Core Web Vitals analysis failed: {str(e)}")
+            print(f"❌ Core Web Vitals analysis failed: {str(e)}")
+            
+            # Return fallback with basic timing if possible
+            return self._fallback_performance_check_legacy(url)
+    
+    def _fallback_performance_check_legacy(self, url: str) -> Dict[str, Any]:
+        """
+        Legacy fallback performance check for when everything else fails
+        """
+        try:
+            import time
+            start_time = time.time()
+            response = http.get(url)
+            load_time = time.time() - start_time
+            
+            # Estimate scores based on load time
+            estimated_score = max(0, 100 - (load_time * 15))
+            
+            if load_time > 3.0:
+                self._add_issue(
+                    DiagnosticCategory.PERFORMANCE,
+                    "Slow Page Load Time (Legacy Test)",
+                    f"Page loads in {load_time:.2f} seconds, should be under 3 seconds",
+                    PriorityLevel.HIGH,
+                    80.0, 60.0,
+                    "Optimize images, minify CSS/JS, enable compression, use CDN"
+                )
+            
+            return {
+                'mobile': {
+                    'lcp': load_time * 1000,  # Convert to ms
+                    'performance_score': estimated_score,
+                    'strategy': 'mobile',
+                    'fallback_used': True,
+                    'legacy_test': True
+                },
+                'desktop': {
+                    'lcp': load_time * 1000,
+                    'performance_score': estimated_score,
+                    'strategy': 'desktop',
+                    'fallback_used': True,
+                    'legacy_test': True
+                },
+                'overall_score': estimated_score,
+                'api_available': False,
+                'fallback_used': True,
+                'legacy_fallback': True
+            }
+        except Exception:
+            return {
+                'mobile': {'performance_score': None},
+                'desktop': {'performance_score': None}, 
+                'overall_score': None,
+                'api_available': False,
+                'error': 'All performance analysis methods failed'
+            }
     
     def _calculate_cwv_score(self, mobile_cwv: Dict, desktop_cwv: Dict) -> float:
         """Calculate overall Core Web Vitals score"""
@@ -637,75 +1185,67 @@ class ProfessionalSEODiagnostics:
                 "Optimize largest content element, improve server response times, eliminate render-blocking resources"
             )
     
-    def _fallback_performance_check(self, url: str) -> Dict[str, Any]:
-        """Fallback performance check when PageSpeed API is unavailable"""
-        try:
-            import time
-            start_time = time.time()
-            response = http.get(url)
-            load_time = time.time() - start_time
-            
-            # Estimate scores based on load time
-            estimated_score = max(0, 100 - (load_time * 15))
-            
-            if load_time > 3.0:
-                self._add_issue(
-                    DiagnosticCategory.PERFORMANCE,
-                    "Slow Page Load Time",
-                    f"Page loads in {load_time:.2f} seconds, should be under 3 seconds",
-                    PriorityLevel.HIGH,
-                    80.0, 60.0,
-                    "Optimize images, minify CSS/JS, enable compression, use CDN"
-                )
-            
-            return {
-                'mobile': {
-                    'lcp': load_time * 1000,  # Convert to ms
-                    'performance_score': estimated_score,
-                    'strategy': 'mobile'
-                },
-                'desktop': {
-                    'lcp': load_time * 1000,
-                    'performance_score': estimated_score,
-                    'strategy': 'desktop'
-                },
-                'overall_score': estimated_score,
-                'api_available': False,
-                'fallback_used': True
-            }
-        except Exception:
-            return {
-                'mobile': {'performance_score': None},
-                'desktop': {'performance_score': None}, 
-                'overall_score': None,
-                'api_available': False,
-                'error': 'Unable to measure performance'
-            }
-    
     def _check_page_speed(self, url: str) -> Dict[str, Any]:
-        """Basic page speed analysis"""
+        """
+        🚀 Enhanced page speed analysis using the new PageSpeed API manager
+        
+        This method now leverages the intelligent rate limiting and caching system
+        """
         try:
-            import time
-            start_time = time.time()
-            response = http.get(url)
-            load_time = time.time() - start_time
+            # Use the global PageSpeed API manager for consistent performance analysis
+            pagespeed_manager = get_pagespeed_manager()
+            performance_results = pagespeed_manager.analyze_performance(url)
             
-            if load_time > 3.0:
+            # Extract overall performance metrics
+            mobile_score = performance_results['mobile'].get('performance_score', 0)
+            desktop_score = performance_results['desktop'].get('performance_score', 0)
+            overall_score = performance_results['overall_score'] or 0
+            
+            # Add performance issues based on scores
+            if overall_score < 50:
                 self._add_issue(
                     DiagnosticCategory.PERFORMANCE,
-                    "Slow page load time",
-                    f"Page loads in {load_time:.2f} seconds, should be under 3 seconds",
+                    "Poor page performance",
+                    f"Page performance score is {overall_score}/100, needs significant optimization",
+                    PriorityLevel.CRITICAL,
+                    90.0, 60.0,
+                    "Optimize images, minify CSS/JS, enable compression, improve server response time"
+                )
+            elif overall_score < 70:
+                self._add_issue(
+                    DiagnosticCategory.PERFORMANCE,
+                    "Below average page performance",
+                    f"Page performance score is {overall_score}/100, has room for improvement",
                     PriorityLevel.HIGH,
-                    80.0, 60.0,
-                    "Optimize images, minify CSS/JS, enable compression, use CDN"
+                    70.0, 50.0,
+                    "Focus on Core Web Vitals optimization and resource loading"
                 )
             
+            # Get load time from fallback data if available
+            load_time = None
+            if performance_results['fallback_used']:
+                mobile_data = performance_results['mobile']
+                load_time = mobile_data.get('load_time_seconds', 0)
+            
             return {
+                'overall_score': overall_score,
+                'mobile_score': mobile_score,
+                'desktop_score': desktop_score,
                 'load_time_seconds': load_time,
-                'performance_score': max(0, 100 - (load_time * 20))
+                'api_available': performance_results['api_available'],
+                'fallback_used': performance_results['fallback_used'],
+                'rate_limit_hit': performance_results['rate_limit_hit']
             }
-        except Exception:
-            return {'load_time_seconds': None, 'performance_score': None}
+            
+        except Exception as e:
+            logger.error(f"Page speed analysis failed: {str(e)}")
+            return {
+                'overall_score': None,
+                'mobile_score': None,
+                'desktop_score': None,
+                'load_time_seconds': None,
+                'error': str(e)
+            }
     
     def _add_issue(self, category: DiagnosticCategory, title: str, description: str, 
                    priority: PriorityLevel, impact: float, effort: float, recommendation: str,
