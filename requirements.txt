@@ -5,8 +5,7 @@ google-auth==2.37.0
 google-auth-oauthlib==1.2.1
 google-auth-httplib2==0.2.0
 Jinja2==3.1.6
-lxml==4.9.4
-lxml_html_clean==0.1.1
+lxml[html_clean]==5.2.2
 MarkupSafe==3.0.2
 pytest==8.3.2 # Added for testing
 pytest-mock==3.14.0 # Added for testing
