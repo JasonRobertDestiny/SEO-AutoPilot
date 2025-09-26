@@ -109,13 +109,28 @@ class PageSpeedInsightsAPI:
             "locale": locale
         }
         
-        # Add categories to parameters
-        for category in categories:
-            params[f"category"] = category
+        # Add categories to parameters - Google API expects multiple category params
+        # We'll build the URL manually to handle multiple category parameters correctly
         
         try:
+            # Build base URL with main parameters
+            base_params = {
+                "url": url,
+                "key": self.api_key,
+                "strategy": strategy,
+                "locale": locale
+            }
+            
+            # Build category parameters manually
+            category_params = "&".join([f"category={cat}" for cat in categories])
+            
+            # Construct full URL
+            from urllib.parse import urlencode
+            base_url_with_params = f"{self.base_url}?{urlencode(base_params)}&{category_params}"
+            
             logger.info(f"🚀 Analyzing {url} with PageSpeed Insights API (strategy: {strategy})")
-            response = self.session.get(self.base_url, params=params, timeout=30)
+            logger.debug(f"🌐 PageSpeed URL: {base_url_with_params}")
+            response = self.session.get(base_url_with_params, timeout=30)
             response.raise_for_status()
             
             data = response.json()

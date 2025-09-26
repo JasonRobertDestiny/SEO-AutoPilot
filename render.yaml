@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: seo-autopilot
+    runtime: python3
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m pyseoanalyzer.api
+    plan: free
+    envVars:
+      - key: PYTHONPATH
+        value: .
+      - key: FLASK_ENV
+        value: production
+      - key: SEO_ANALYZER_PORT
+        fromService:
+          type: web
+          name: seo-autopilot
+          property: port
+      - key: ANTHROPIC_API_KEY
+        sync: false  # This should be set manually in Render dashboard
+      - key: SILICONFLOW_API_KEY
+        sync: false  # This should be set manually in Render dashboard
+    scaling:
+      minInstances: 1
+      maxInstances: 1
+    healthCheckPath: /api/health
+    domains:
+      - seo-autopilot.onrender.com

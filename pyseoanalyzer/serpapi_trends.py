@@ -105,7 +105,10 @@ class SerpAPITrends:
         }
         
         try:
+            # Debug log the actual URL being requested
+            logger.debug(f"🌐 Making SerpAPI request with params: {params}")
             response = self.session.get(self.base_url, params=params, timeout=30)
+            logger.debug(f"🌐 Full URL: {response.url}")
             response.raise_for_status()
             data = response.json()
             
@@ -212,27 +215,61 @@ class SerpAPITrends:
         Returns:
             List of trending keywords with metadata
         """
-        params = {
-            "engine": "google_trends",
-            "trending_searches": "true",
-            "geo": region,
-            "api_key": self.api_key
-        }
+        # Try different approaches for getting trending data
+        trending_approaches = [
+            # Approach 1: Use realtime trends
+            {
+                "engine": "google_trends",
+                "data_type": "REALTIME",
+                "geo": region,
+                "api_key": self.api_key
+            },
+            # Approach 2: Use trending searches (older format)
+            {
+                "engine": "google_trends_trending_now", 
+                "geo": region,
+                "api_key": self.api_key
+            },
+            # Approach 3: Fallback to popular searches
+            {
+                "engine": "google_trends",
+                "data_type": "POPULAR",
+                "geo": region, 
+                "api_key": self.api_key
+            }
+        ]
         
-        if category:
-            params["cat"] = category
+        for i, params in enumerate(trending_approaches):
+            try:
+                if category:
+                    params["cat"] = category
+                
+                logger.info(f"🔍 Trying trending approach {i+1}: {params.get('data_type', params.get('engine'))}")
+                logger.debug(f"🌐 Full params for trending: {params}")
+                response = self.session.get(self.base_url, params=params, timeout=15)
+                logger.debug(f"🌐 Full trending URL: {response.url}")
+                response.raise_for_status()
+                data = response.json()
+                
+                # Try different response structures
+                trending_searches = (
+                    data.get("trending_searches", []) or
+                    data.get("realtime_trends", []) or
+                    data.get("popular_searches", []) or
+                    data.get("results", [])
+                )
+                
+                if trending_searches:
+                    logger.info(f"✅ Successfully got {len(trending_searches)} trending keywords")
+                    return trending_searches[:10]  # Limit to top 10
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ Trending approach {i+1} failed: {e}")
+                continue
         
-        try:
-            response = self.session.get(self.base_url, params=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            
-            trending_searches = data.get("trending_searches", [])
-            return trending_searches
-            
-        except Exception as e:
-            logger.error(f"Failed to get trending keywords: {e}")
-            return []
+        # If all approaches fail, return empty list
+        logger.warning("⚠️ All trending approaches failed, returning empty list")
+        return []
     
     def analyze_content_opportunities(
         self, 

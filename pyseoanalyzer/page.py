@@ -16,6 +16,7 @@ from .http_client import http
 from .llm_analyst import LLMSEOEnhancer
 from .stopwords import ENGLISH_STOP_WORDS
 from .professional_diagnostics import ProfessionalSEODiagnostics
+from .enhanced_content_analyzer import AdvancedContentAnalyzer, WebsiteTypeDetector
 
 TOKEN_REGEX = re.compile(r"(?u)\b\w\w+\b")
 

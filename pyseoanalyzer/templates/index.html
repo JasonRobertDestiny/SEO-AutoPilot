@@ -235,6 +235,16 @@
                             <i class="fas fa-tools mr-2"></i>
                             🛠️ SEO Tools
                         </a>
+                        <a href="#" class="nav-item flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-50"
+                           onclick="showSection('seo-todo')">
+                            <i class="fas fa-tasks mr-2"></i>
+                            ✅ Action Items
+                        </a>
+                        <a href="#" class="nav-item flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-50"
+                           onclick="showSection('prompt-generator')">
+                            <i class="fas fa-magic mr-2"></i>
+                            🎯 Prompt Generator
+                        </a>
                     </nav>
                 </div>
             </div>
@@ -953,6 +963,232 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- TODO/Action Items Section -->
+                <div id="seo-todo" class="analysis-section">
+                    <div class="bg-white rounded-lg shadow-sm p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-xl font-bold text-gray-900">✅ SEO Action Items</h3>
+                            <div class="flex items-center space-x-4">
+                                <span class="text-sm text-gray-500" id="todoStats">0 pending tasks</span>
+                                <button id="addTodoBtn" 
+                                        class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center">
+                                    <i class="fas fa-plus mr-2"></i>
+                                    Add Task
+                                </button>
+                                <button id="clearCompletedBtn"
+                                        class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center">
+                                    <i class="fas fa-trash mr-2"></i>
+                                    Clear Completed
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Quick Add Todo Form (Initially Hidden) -->
+                        <div id="todoForm" class="bg-gray-50 rounded-lg p-4 mb-6 hidden">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Task Description</label>
+                                    <input type="text" id="todoInput" placeholder="Enter your SEO task..."
+                                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Priority</label>
+                                    <select id="todoPriority" class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                        <option value="high">High Priority</option>
+                                        <option value="medium" selected>Medium Priority</option>
+                                        <option value="low">Low Priority</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center space-x-3">
+                                    <button id="saveTodoBtn"
+                                            class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                        <i class="fas fa-save mr-2"></i>
+                                        Save Task
+                                    </button>
+                                    <button id="cancelTodoBtn"
+                                            class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                        <i class="fas fa-times mr-2"></i>
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TODO List Container -->
+                        <div id="todoList" class="space-y-3">
+                            <!-- TODOs will be populated here by JavaScript -->
+                            <div class="text-center py-8">
+                                <i class="fas fa-tasks text-gray-400 text-3xl mb-4"></i>
+                                <p class="text-gray-500">No action items yet. Add tasks from your SEO strategy or create custom ones.</p>
+                                <p class="text-sm text-gray-400 mt-2">Tasks added from strategies will be saved automatically.</p>
+                            </div>
+                        </div>
+
+                        <!-- Information Panel -->
+                        <div class="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
+                            <div class="flex items-start">
+                                <i class="fas fa-lightbulb text-green-600 mt-1 mr-3"></i>
+                                <div class="text-sm text-green-800">
+                                    <p class="font-medium mb-2">Pro Tip: Organize Your SEO Workflow</p>
+                                    <p>Use this action items section to track SEO tasks from your analysis. 
+                                    You can add strategies directly from the Growth Strategies section using the "Add to TODO" button, 
+                                    or create custom tasks. Mark items as complete as you work through your SEO improvements!</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Prompt Generator Section -->
+                <div id="prompt-generator" class="analysis-section">
+                    <div class="bg-white rounded-lg shadow-sm p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-xl font-bold text-gray-900">🎯 SEO Content Optimization Prompt Generator</h3>
+                            <span class="text-sm text-gray-500">MGX专用优化</span>
+                        </div>
+                        
+                        <div class="mb-6">
+                            <p class="text-sm text-gray-600">
+                                <i class="fas fa-magic text-purple-500 mr-2"></i>
+                                基于当前SEO分析结果，生成针对性的内容优化prompt，让MGX能够精准优化网站内容。
+                            </p>
+                        </div>
+                        
+                        <!-- Prompt Configuration -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                            <!-- Left Column: Configuration -->
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">优化类型</label>
+                                    <select id="optimizationType" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                        <option value="technical_seo">技术SEO优化</option>
+                                        <option value="content_quality">内容质量提升</option>
+                                        <option value="user_experience">用户体验优化</option>
+                                        <option value="trend_analysis">趋势分析优化</option>
+                                        <option value="strategic_advice">战略建议</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">内容类型</label>
+                                    <select id="contentType" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                        <option value="blog_post">博客文章</option>
+                                        <option value="product_page">产品页面</option>
+                                        <option value="landing_page">着陆页</option>
+                                        <option value="category_page">分类页面</option>
+                                        <option value="meta_tags">元标签</option>
+                                        <option value="schema_markup">结构化数据</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">优先级</label>
+                                    <select id="priorityLevel" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                        <option value="high">高优先级</option>
+                                        <option value="medium">中等优先级</option>
+                                        <option value="low">低优先级</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">目标关键词 (可选)</label>
+                                    <input type="text" id="targetKeywords" placeholder="输入目标关键词，用逗号分隔" 
+                                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">特定问题描述 (可选)</label>
+                                    <textarea id="specificIssues" rows="3" placeholder="描述需要特别关注的SEO问题..." 
+                                              class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"></textarea>
+                                </div>
+                            </div>
+                            
+                            <!-- Right Column: Quick Actions -->
+                            <div class="space-y-4">
+                                <div class="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4">
+                                    <h4 class="text-lg font-semibold text-gray-900 mb-3">快速生成</h4>
+                                    <div class="space-y-2">
+                                        <button onclick="generateFromAnalysis()" 
+                                                class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center">
+                                            <i class="fas fa-chart-line mr-2"></i>
+                                            基于当前分析结果生成
+                                        </button>
+                                        <button onclick="generateBatchPrompts()" 
+                                                class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center">
+                                            <i class="fas fa-layer-group mr-2"></i>
+                                            批量生成多类型prompt
+                                        </button>
+                                        <button onclick="viewTemplates()" 
+                                                class="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center">
+                                            <i class="fas fa-eye mr-2"></i>
+                                            查看可用模板
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                    <h4 class="text-sm font-semibold text-yellow-800 mb-2">💡 使用提示</h4>
+                                    <ul class="text-xs text-yellow-700 space-y-1">
+                                        <li>• 选择与当前SEO问题最相关的优化类型</li>
+                                        <li>• 高优先级问题会生成更详细的prompt</li>
+                                        <li>• 添加目标关键词可获得更精准的优化建议</li>
+                                        <li>• 生成的prompt可直接用于MGX内容优化</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Generate Button -->
+                        <div class="mb-6">
+                            <button onclick="generateCustomPrompt()" 
+                                    class="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105 shadow-lg flex items-center justify-center">
+                                <i class="fas fa-magic mr-2"></i>
+                                生成定制化SEO优化Prompt
+                            </button>
+                        </div>
+                        
+                        <!-- Results Area -->
+                        <div id="promptResults" class="hidden">
+                            <div class="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h4 class="text-lg font-semibold text-gray-900">生成的Prompt</h4>
+                                    <div class="flex space-x-2">
+                                        <button onclick="copyPrompt()" 
+                                                class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors">
+                                            <i class="fas fa-copy mr-1"></i>复制
+                                        </button>
+                                        <button onclick="downloadPrompt()" 
+                                                class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors">
+                                            <i class="fas fa-download mr-1"></i>下载
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="generatedPrompt" class="bg-white border border-gray-300 rounded-lg p-4 font-mono text-sm whitespace-pre-wrap max-h-96 overflow-y-auto">
+                                    <!-- Generated prompt will appear here -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Status Area -->
+                        <div id="promptStatus" class="hidden mt-4">
+                            <div class="text-sm text-gray-600 bg-blue-50 p-3 rounded">
+                                <div class="flex items-center">
+                                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                                    <span id="promptStatusText">正在生成prompt...</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Batch Results -->
+                        <div id="batchResults" class="hidden mt-6">
+                            <h4 class="text-lg font-semibold text-gray-900 mb-4">批量生成结果</h4>
+                            <div id="batchPromptsList" class="space-y-4">
+                                <!-- Batch results will appear here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1183,6 +1419,336 @@
                     <span class="text-sm text-gray-600 flex-1">${heading.value}</span>
                 </div>
             `).join('');
+        }
+
+        // Prompt Generator Functions
+        async function generateCustomPrompt() {
+            const optimizationType = document.getElementById('optimizationType').value;
+            const contentType = document.getElementById('contentType').value;
+            const priorityLevel = document.getElementById('priorityLevel').value;
+            const targetKeywords = document.getElementById('targetKeywords').value;
+            const specificIssues = document.getElementById('specificIssues').value;
+            
+            showPromptStatus('正在生成定制化prompt...');
+            
+            try {
+                const response = await fetch('/api/prompt/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        optimization_type: optimizationType,
+                        content_type: contentType,
+                        priority: priorityLevel,
+                        target_keywords: targetKeywords ? targetKeywords.split(',').map(k => k.trim()) : [],
+                        specific_issues: specificIssues || null,
+                        current_url: window.currentAnalysisUrl || null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayPromptResult(data.prompt);
+                } else {
+                    showPromptError(data.error || '生成prompt时发生错误');
+                }
+            } catch (error) {
+                console.error('Error generating prompt:', error);
+                showPromptError('网络错误，请稍后重试');
+            } finally {
+                hidePromptStatus();
+            }
+        }
+        
+        async function generateFromAnalysis() {
+            // 检查是否有当前分析数据
+            if (!window.currentAnalysisData || !window.currentAnalysisUrl) {
+                showPromptError('请先进行SEO分析以获取完整数据');
+                return;
+            }
+            
+            showPromptStatus('基于当前分析结果生成prompt...');
+            
+            try {
+                // 获取选择的优化类型，默认使用content_quality
+                const optimizationType = document.getElementById('optimizationType')?.value || 'content_quality';
+                
+                // 构建完整的请求数据
+                const requestData = {
+                    analysis_result: window.currentAnalysisData,
+                    optimization_type: optimizationType,
+                    target_score: 90.0,
+                    custom_requirements: []
+                };
+                
+                console.log('📊 Sending analysis data for prompt generation:', requestData);
+                
+                const response = await fetch('/api/prompt/from-analysis', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('✅ Prompt generated successfully:', data);
+                    displayPromptResult(data.prompt, data.context_summary);
+                } else {
+                    console.error('❌ Prompt generation failed:', data.error);
+                    showPromptError(data.error || '生成prompt时发生错误');
+                }
+            } catch (error) {
+                console.error('❌ Error generating prompt from analysis:', error);
+                showPromptError('网络错误，请稍后重试');
+            } finally {
+                hidePromptStatus();
+            }
+        }
+        
+        async function generateBatchPrompts() {
+            showPromptStatus('批量生成多类型prompt...');
+            
+            try {
+                const optimizationTypes = ['technical_seo', 'content_quality', 'user_experience'];
+                const contentType = document.getElementById('contentType').value;
+                const priorityLevel = document.getElementById('priorityLevel').value;
+                
+                const response = await fetch('/api/prompt/batch', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        optimization_types: optimizationTypes,
+                        content_type: contentType,
+                        priority: priorityLevel,
+                        current_url: window.currentAnalysisUrl || null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayBatchResults(data.prompts);
+                } else {
+                    showPromptError(data.error || '批量生成prompt时发生错误');
+                }
+            } catch (error) {
+                console.error('Error generating batch prompts:', error);
+                showPromptError('网络错误，请稍后重试');
+            } finally {
+                hidePromptStatus();
+            }
+        }
+        
+        async function viewTemplates() {
+            showPromptStatus('获取可用模板...');
+            
+            try {
+                const response = await fetch('/api/prompt/templates');
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayTemplates(data.templates);
+                } else {
+                    showPromptError(data.error || '获取模板时发生错误');
+                }
+            } catch (error) {
+                console.error('Error fetching templates:', error);
+                showPromptError('网络错误，请稍后重试');
+            } finally {
+                hidePromptStatus();
+            }
+        }
+        
+        function displayPromptResult(prompt, contextSummary) {
+            const resultsDiv = document.getElementById('promptResults');
+            const promptDiv = document.getElementById('generatedPrompt');
+            
+            // 创建完整的显示内容
+            let displayContent = prompt;
+            
+            // 如果有上下文摘要，添加到显示中
+            if (contextSummary) {
+                displayContent = `=== 基于分析结果生成的SEO优化Prompt ===
+
+网站URL: ${contextSummary.url || 'N/A'}
+当前SEO评分: ${contextSummary.current_score || 'N/A'}
+目标评分: ${contextSummary.target_score || 'N/A'}
+目标关键词: ${(contextSummary.primary_keywords || []).join(', ') || 'N/A'}
+检测到问题数量: ${contextSummary.issues_detected || 'N/A'}
+
+=== 优化Prompt内容 ===
+${prompt}
+
+=== 使用说明 ===
+请将以上prompt复制并使用于您的内容优化工具中，基于具体的分析数据进行SEO优化。`;
+            }
+            
+            promptDiv.textContent = displayContent;
+            resultsDiv.classList.remove('hidden');
+            
+            // Hide batch results if visible
+            document.getElementById('batchResults').classList.add('hidden');
+            
+            console.log('✅ Prompt result displayed successfully');
+        }
+        
+        function displayBatchResults(prompts) {
+            const batchDiv = document.getElementById('batchResults');
+            const listDiv = document.getElementById('batchPromptsList');
+            
+            listDiv.innerHTML = prompts.map((promptData, index) => `
+                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h5 class="font-semibold text-gray-900">${getOptimizationTypeLabel(promptData.optimization_type)}</h5>
+                        <div class="flex space-x-2">
+                            <button onclick="copyBatchPrompt(${index})" 
+                                    class="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs font-medium transition-colors">
+                                <i class="fas fa-copy mr-1"></i>复制
+                            </button>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 border border-gray-200 rounded p-3 font-mono text-xs whitespace-pre-wrap max-h-48 overflow-y-auto">
+                        ${promptData.prompt}
+                    </div>
+                </div>
+            `).join('');
+            
+            batchDiv.classList.remove('hidden');
+            
+            // Hide single result if visible
+            document.getElementById('promptResults').classList.add('hidden');
+            
+            // Store prompts for copying
+            window.batchPrompts = prompts;
+        }
+        
+        function displayTemplates(templates) {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-lg p-6 max-w-4xl max-h-96 overflow-y-auto">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold">可用Prompt模板</h3>
+                        <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        ${Object.entries(templates).map(([type, template]) => `
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <h4 class="font-medium text-gray-900 mb-2">${getOptimizationTypeLabel(type)}</h4>
+                                <div class="bg-gray-50 p-3 rounded text-sm font-mono whitespace-pre-wrap">
+                                    ${template.template}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function getOptimizationTypeLabel(type) {
+            const labels = {
+                // Uppercase format (legacy)
+                'TECHNICAL_SEO': '技术SEO优化',
+                'CONTENT_QUALITY': '内容质量提升',
+                'USER_EXPERIENCE': '用户体验优化',
+                'TREND_ANALYSIS': '趋势分析优化',
+                'STRATEGIC_ADVICE': '战略建议',
+                // Lowercase format (current API)
+                'technical_seo': '技术SEO优化',
+                'content_quality': '内容质量提升',
+                'user_experience': '用户体验优化',
+                'trend_analysis': '趋势分析优化',
+                'strategic_advice': '战略建议'
+            };
+            return labels[type] || type;
+        }
+        
+        function showPromptStatus(message) {
+            const statusDiv = document.getElementById('promptStatus');
+            const statusText = document.getElementById('promptStatusText');
+            
+            statusText.textContent = message;
+            statusDiv.classList.remove('hidden');
+        }
+        
+        function hidePromptStatus() {
+            document.getElementById('promptStatus').classList.add('hidden');
+        }
+        
+        function showPromptError(message) {
+            const statusDiv = document.getElementById('promptStatus');
+            const statusText = document.getElementById('promptStatusText');
+            
+            statusDiv.innerHTML = `
+                <div class="text-sm text-red-600 bg-red-50 p-3 rounded">
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <span>${message}</span>
+                    </div>
+                </div>
+            `;
+            statusDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                hidePromptStatus();
+            }, 5000);
+        }
+        
+        function copyPrompt() {
+            const promptText = document.getElementById('generatedPrompt').textContent;
+            navigator.clipboard.writeText(promptText).then(() => {
+                showToast('Prompt已复制到剪贴板');
+            }).catch(err => {
+                console.error('复制失败:', err);
+                showToast('复制失败，请手动选择文本');
+            });
+        }
+        
+        function copyBatchPrompt(index) {
+            if (window.batchPrompts && window.batchPrompts[index]) {
+                const promptText = window.batchPrompts[index].prompt;
+                navigator.clipboard.writeText(promptText).then(() => {
+                    showToast('Prompt已复制到剪贴板');
+                }).catch(err => {
+                    console.error('复制失败:', err);
+                    showToast('复制失败，请手动选择文本');
+                });
+            }
+        }
+        
+        function downloadPrompt() {
+            const promptText = document.getElementById('generatedPrompt').textContent;
+            const blob = new Blob([promptText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'seo-optimization-prompt.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('Prompt已下载');
+        }
+        
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
         }
 
         // Initialize when DOM is ready

@@ -1,2 +1,1 @@
-上传到GitHub配置：JasonRobertDestiny                                                                                            │
-johnrobertdestiny@gmail.com、
+上传到GitHub，上传重要的文件，一些不重要的文档之类的不需要上传

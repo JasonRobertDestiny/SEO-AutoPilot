@@ -1,6 +1,17 @@
 class SEOAgent {
     constructor() {
-        this.apiBaseUrl = `http://${window.location.hostname}:${window.location.port}/api`;
+        // Production-ready API base URL detection
+        const protocol = window.location.protocol; // http: or https:
+        const hostname = window.location.hostname;
+        const port = window.location.port;
+        
+        // For production HTTPS or when no port is specified, don't include port
+        if (protocol === 'https:' || !port) {
+            this.apiBaseUrl = `${protocol}//${hostname}/api`;
+        } else {
+            // For local development with custom port
+            this.apiBaseUrl = `${protocol}//${hostname}:${port}/api`;
+        }
         this.currentAnalysis = null;
         this.todos = JSON.parse(localStorage.getItem('seoTodos')) || [];
         this.theme = localStorage.getItem('theme') || 'light';
@@ -252,7 +263,15 @@ class SEOAgent {
 
         document.getElementById('addTodoBtn')?.addEventListener('click', () => this.showAddTodoForm());
         document.getElementById('saveTodoBtn')?.addEventListener('click', () => this.saveTodo());
+        document.getElementById('cancelTodoBtn')?.addEventListener('click', () => this.hideAddTodoForm());
         document.getElementById('clearCompletedBtn')?.addEventListener('click', () => this.clearCompleted());
+        
+        // Add enter key support for todo input
+        document.getElementById('todoInput')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.saveTodo();
+            }
+        });
         
         // Sitemap generation button
         document.getElementById('generateSitemapBtn')?.addEventListener('click', () => this.generateSitemap());
@@ -386,6 +405,10 @@ class SEOAgent {
             // Usage tracking removed - unlimited free service
             
             this.currentAnalysis = result;
+            
+            // 🌐 保存分析数据到全局变量供其他函数使用
+            window.currentAnalysisData = result;
+            console.log('📊 Analysis data saved to window.currentAnalysisData:', result);
             
             // Handle the new optimized response format
             const analysisData = result.analysis || result;
@@ -2175,53 +2198,213 @@ class SEOAgent {
     }
 
     linkToAnalysisSection(category) {
-        // Map strategy categories to analysis sections
+        // Enhanced map strategy categories to analysis sections
         const categoryMappings = {
-            'Content Review': 'basic-seo',
-            'Content Strategy': 'basic-seo', 
-            'Content Quality': 'basic-seo',
-            'Competitive Analysis': 'ai-analysis',
-            'Link Building': 'basic-seo',
+            'Content Review': 'seo-analysis',
+            'Content Strategy': 'seo-analysis', 
+            'Content Quality': 'seo-analysis',
+            'Competitive Analysis': 'seo-strategy',
+            'Link Building': 'links',
             'Technical SEO': 'professional-diagnostics',
             'Performance': 'professional-diagnostics',
             'Mobile SEO': 'professional-diagnostics',
             'Security': 'professional-diagnostics',
             'Structured Data': 'professional-diagnostics',
-            'Trends Analysis': 'ai-analysis',
-            'Keyword Optimization': 'basic-seo',
+            'Trends Analysis': 'seo-strategy',
+            'Keyword Optimization': 'seo-analysis',
             'User Experience': 'professional-diagnostics',
-            'Analytics': 'ai-analysis'
+            'Analytics': 'seo-strategy',
+            // Enhanced mappings for better coverage
+            'SEO Strategy': 'seo-strategy',
+            'Content Optimization': 'seo-analysis',
+            'Site Structure': 'professional-diagnostics',
+            'Meta Tags': 'seo-analysis',
+            'Images': 'seo-analysis',
+            'Headings': 'seo-analysis',
+            'Internal Linking': 'links',
+            'External Linking': 'links',
+            'Page Speed': 'professional-diagnostics',
+            'Mobile Optimization': 'professional-diagnostics',
+            'Core Web Vitals': 'professional-diagnostics'
         };
 
         // Get the target section ID
-        const targetSection = categoryMappings[category] || 'basic-seo';
+        const targetSection = categoryMappings[category] || 'seo-analysis';
         
-        // Show the target section
-        this.showSection(targetSection);
-        
-        // Scroll to the section with smooth animation
-        const element = document.getElementById(targetSection);
-        if (element) {
-            element.scrollIntoView({ 
-                behavior: 'smooth', 
-                block: 'start' 
-            });
+        try {
+            // Show the target section
+            this.showSection(targetSection);
             
-            // Add a highlight effect
-            element.style.border = '2px solid #8B5CF6';
-            element.style.boxShadow = '0 0 20px rgba(139, 92, 246, 0.3)';
-            element.style.transition = 'all 0.3s ease';
-            
-            // Remove highlight after 3 seconds
-            setTimeout(() => {
-                element.style.border = '';
-                element.style.boxShadow = '';
-                element.style.transition = '';
-            }, 3000);
+            // Scroll to the section with smooth animation
+            const element = document.getElementById(targetSection);
+            if (element) {
+                element.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start' 
+                });
+                
+                // Enhanced highlight effect with better visual feedback
+                this.highlightAnalysisSection(element, category);
+                
+                // Show success feedback
+                this.showAlert(`✅ Navigated to ${category} details in ${targetSection.replace('-', ' ').toUpperCase()} section`, 'success');
+            } else {
+                throw new Error(`Section ${targetSection} not found`);
+            }
+        } catch (error) {
+            console.error('Failed to link to analysis section:', error);
+            this.showAlert(`⚠️ Could not navigate to ${category} details. Section may not be available.`, 'warning');
         }
+    }
+
+    /**
+     * Enhanced section highlighting with better visual feedback
+     */
+    highlightAnalysisSection(element, category) {
+        // Remove any existing highlights
+        document.querySelectorAll('.view-details-highlight').forEach(el => {
+            el.classList.remove('view-details-highlight');
+        });
+
+        // Add enhanced highlight class
+        element.classList.add('view-details-highlight');
         
-        // Show success message
-        this.showAlert(`Viewing details for ${category} in ${targetSection.replace('-', ' ')} section`, 'info');
+        // Create a temporary overlay with category info
+        const overlay = document.createElement('div');
+        overlay.className = 'category-highlight-overlay';
+        overlay.innerHTML = `
+            <div class="highlight-badge">
+                <i class="fas fa-eye mr-2"></i>
+                Viewing: ${category}
+            </div>
+        `;
+        
+        element.style.position = 'relative';
+        element.appendChild(overlay);
+        
+        // Enhanced highlight styling
+        element.style.border = '3px solid #8B5CF6';
+        element.style.boxShadow = '0 0 30px rgba(139, 92, 246, 0.4)';
+        element.style.transition = 'all 0.4s ease';
+        element.style.transform = 'scale(1.02)';
+        
+        // Remove highlight and overlay after 4 seconds
+        setTimeout(() => {
+            element.classList.remove('view-details-highlight');
+            element.style.border = '';
+            element.style.boxShadow = '';
+            element.style.transition = '';
+            element.style.transform = '';
+            if (overlay.parentNode) {
+                overlay.parentNode.removeChild(overlay);
+            }
+        }, 4000);
+    }
+
+    /**
+     * Add TODO from recommendation with proper data structure and error handling
+     * This is the missing function that was being called but not defined
+     */
+    addTodoFromRecommendation(text, priority = 'medium', source = 'strategy', category = 'general') {
+        try {
+            // Validate input
+            if (!text || typeof text !== 'string' || text.trim().length === 0) {
+                throw new Error('Todo text is required and must be a non-empty string');
+            }
+
+            // Initialize todos array if not exists
+            if (!this.todos) {
+                this.todos = [];
+            }
+
+            // Check for duplicates
+            const duplicateExists = this.todos.some(todo => 
+                todo.text.toLowerCase().trim() === text.toLowerCase().trim()
+            );
+
+            if (duplicateExists) {
+                this.showAlert('⚠️ This task is already in your TODO list', 'warning');
+                return false;
+            }
+
+            // Create new todo with consistent data structure
+            const newTodo = {
+                id: Date.now() + Math.random(), // More unique ID generation
+                text: text.trim(),
+                priority: ['high', 'medium', 'low'].includes(priority) ? priority : 'medium',
+                completed: false,
+                createdAt: new Date().toISOString(),
+                source: source,
+                category: category,
+                // Additional metadata for better tracking
+                addedBy: 'seo_agent',
+                lastModified: new Date().toISOString()
+            };
+
+            // Add to local todos array
+            this.todos.push(newTodo);
+            
+            // Save to localStorage immediately
+            this.saveTodos();
+            
+            // Update UI
+            this.renderTodos();
+            this.updateTodoStats();
+            
+            // Try to sync with backend (non-blocking)
+            this.syncTodoWithBackend(newTodo).catch(error => {
+                console.warn('Backend sync failed for new todo:', error);
+                // Don't show error to user as local storage still works
+            });
+
+            console.log(`✅ Added TODO: ${text} (Priority: ${priority})`);
+            return true;
+        } catch (error) {
+            console.error('Failed to add todo from recommendation:', error);
+            this.showAlert(`❌ Failed to add task: ${error.message}`, 'error');
+            return false;
+        }
+    }
+
+    /**
+     * Sync individual todo with backend
+     */
+    async syncTodoWithBackend(todo) {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/todos`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    text: todo.text,
+                    priority: todo.priority,
+                    source: todo.source,
+                    category: todo.category
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Backend sync failed: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            // Update local todo with backend ID if provided
+            if (result.todo && result.todo.id) {
+                const localTodo = this.todos.find(t => t.id === todo.id);
+                if (localTodo) {
+                    localTodo.backendId = result.todo.id;
+                    localTodo.synced = true;
+                    this.saveTodos();
+                }
+            }
+
+            return result;
+        } catch (error) {
+            console.warn('Todo backend sync failed:', error);
+            throw error;
+        }
     }
 
     async syncTodosWithBackend() {
@@ -2422,6 +2605,123 @@ class SEOAgent {
 
     saveTodos() {
         localStorage.setItem('seoTodos', JSON.stringify(this.todos));
+    }
+
+    showAddTodoForm() {
+        const todoForm = document.getElementById('todoForm');
+        const todoInput = document.getElementById('todoInput');
+        
+        if (todoForm) {
+            todoForm.classList.remove('hidden');
+            if (todoInput) {
+                todoInput.focus();
+            }
+        }
+    }
+
+    hideAddTodoForm() {
+        const todoForm = document.getElementById('todoForm');
+        const todoInput = document.getElementById('todoInput');
+        const todoPriority = document.getElementById('todoPriority');
+        
+        if (todoForm) {
+            todoForm.classList.add('hidden');
+        }
+        
+        // Clear form fields
+        if (todoInput) todoInput.value = '';
+        if (todoPriority) todoPriority.value = 'medium';
+    }
+
+    async saveTodo() {
+        const todoInput = document.getElementById('todoInput');
+        const todoPriority = document.getElementById('todoPriority');
+        
+        if (!todoInput || !todoInput.value.trim()) {
+            this.showAlert('Please enter a task description', 'warning');
+            return;
+        }
+        
+        const todoText = todoInput.value.trim();
+        const priority = todoPriority?.value || 'medium';
+        
+        try {
+            // Create new todo
+            const newTodo = {
+                id: Date.now(),
+                text: todoText,
+                priority: priority,
+                completed: false,
+                createdAt: new Date().toISOString()
+            };
+            
+            // Try to save to backend first
+            const response = await fetch(`${this.apiBaseUrl}/todos`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    text: todoText,
+                    priority: priority
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                // Use the todo returned from backend (may have different ID)
+                this.todos.push(result.todo || newTodo);
+            } else {
+                // Fallback to local storage if backend fails
+                this.todos.push(newTodo);
+                console.warn('Backend todo creation failed, using local storage');
+            }
+        } catch (error) {
+            console.error('Failed to save todo:', error);
+            // Fallback to local storage
+            const newTodo = {
+                id: Date.now(),
+                text: todoText,
+                priority: priority,
+                completed: false,
+                createdAt: new Date().toISOString()
+            };
+            this.todos.push(newTodo);
+        }
+        
+        // Update UI
+        this.saveTodos();
+        this.renderTodos();
+        this.updateTodoStats();
+        this.hideAddTodoForm();
+        
+        this.showAlert('Task added successfully!', 'success');
+    }
+
+    addTodoFromRecommendation(text, priority = 'medium') {
+        const newTodo = {
+            id: Date.now(),
+            text: text,
+            priority: priority,
+            completed: false,
+            createdAt: new Date().toISOString(),
+            source: 'strategy'  // Mark as coming from strategy
+        };
+        
+        // Check for duplicates
+        const isDuplicate = this.todos.some(todo => 
+            todo.text.toLowerCase().trim() === text.toLowerCase().trim()
+        );
+        
+        if (isDuplicate) {
+            this.showAlert('This task is already in your TODO list', 'warning');
+            return;
+        }
+        
+        this.todos.push(newTodo);
+        this.saveTodos();
+        this.renderTodos();
+        this.updateTodoStats();
     }
 
     showLoading(show) {

@@ -72,6 +72,18 @@ docker run --rm -e ANTHROPIC_API_KEY="your_key" python-seo-analyzer http://examp
 # Or use Silicon Flow API
 docker run --rm -e SILICONFLOW_API_KEY="your_key" python-seo-analyzer http://example.com/ --run-llm-analysis
 ```
+### Code Quality and Linting
+```bash
+# Format code with Black
+black pyseoanalyzer/
+
+# Lint with Ruff
+ruff check pyseoanalyzer/
+
+# Type checking (if mypy is configured)
+mypy pyseoanalyzer/
+```
+
 ### Code Quality Guidelines
 ```
 # Critical development patterns to follow:
@@ -82,6 +94,9 @@ docker run --rm -e SILICONFLOW_API_KEY="your_key" python-seo-analyzer http://exa
 # - Data operations must preserve permissions and access controls
 # - Batch operations must ensure consistency across all items
 # - Exception scenarios must have explicit error handling
+# - Follow PEP 8 and use Black for formatting
+# - Use type annotations where appropriate
+# - Maintain high test coverage
 ```
 
 ### CLI Usage

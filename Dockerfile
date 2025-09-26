@@ -1,31 +1,41 @@
-FROM python:3.13.2-bookworm
+# Production Dockerfile for SEO AutoPilot - Render Optimized
+FROM python:3.9-slim
 
-RUN apt-get update -y && apt-get upgrade -y
+# Set environment variables for production
+ENV PYTHONPATH=/app
+ENV FLASK_ENV=production
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-RUN pip3 install --upgrade pip
-RUN pip3 install uv
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY ./requirements.txt /python-seo-analyzer/
-
-RUN uv pip install --system --verbose --requirement /python-seo-analyzer/requirements.txt
-RUN uv cache clean --verbose
-
-COPY . /python-seo-analyzer
-
-# Create a non-root user
-RUN groupadd -r appgroup && useradd --no-log-init -r -g appgroup appuser
-
-# Set ownership of the app directory
-RUN chown -R appuser:appgroup /python-seo-analyzer
-
-# Switch back to root to install the package system-wide
-USER root
-RUN python3 -m pip install /python-seo-analyzer
-
-# Switch back to the non-root user
-USER appuser
-
+# Create app directory
 WORKDIR /app
 
-ENTRYPOINT ["python-seo-analyzer"]
-CMD ["--version"]
+# Copy requirements first for better Docker layer caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Install the package in production mode
+RUN pip install .
+
+# Create non-root user for security
+RUN groupadd -r appgroup && useradd --no-log-init -r -g appgroup appuser
+RUN chown -R appuser:appgroup /app
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-5000}/api/health || exit 1
+
+# Start the web server (Render will set PORT environment variable)
+CMD python -m pyseoanalyzer.api

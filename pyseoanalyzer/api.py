@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, send_from_directory, Response
+from flask import Flask, request, jsonify, render_template, send_from_directory, Response, session
 from flask_cors import CORS
 import json
 import time
@@ -15,9 +15,18 @@ from pyseoanalyzer.llm_analyst import enhanced_modern_analyze
 from pyseoanalyzer.sitemap_generator import SitemapGenerator, generate_sitemap_from_analysis
 from pyseoanalyzer.report_generator import SEOReportGenerator
 from pyseoanalyzer.intelligent_cache import get_seo_cache, get_cache_stats
+from pyseoanalyzer.seo_prompt_generator import SEOPromptGenerator, SEOContext, OptimizationType, ContentType, PriorityLevel
+from pyseoanalyzer.mgx_prompt_optimizer import MGXPromptOptimizer
 
 app = Flask(__name__, template_folder='templates', static_folder='templates')
+app.secret_key = os.environ.get('SECRET_KEY', 'seo-analyzer-dev-key-12345')  # Required for sessions
 CORS(app)
+
+# 初始化SEO Prompt生成器
+prompt_generator = SEOPromptGenerator()
+
+# 初始化MGX Prompt优化器
+mgx_prompt_optimizer = MGXPromptOptimizer()
 
 # SEO预警阈值配置
 SEO_THRESHOLDS = {
@@ -2141,8 +2150,1210 @@ def pagespeed_api_status():
         print(f"❌ PageSpeed status check error: {e}")
         return jsonify({'error': f'PageSpeed status check failed: {str(e)}'}), 500
 
+# 🎯 MGX Integration API Endpoints
+@app.route('/api/mgx-seo-optimizer', methods=['POST'])
+def mgx_seo_optimizer():
+    """
+    🎯 MGX SEO Optimizer API - 为MGX平台提供具体的SEO优化指导
+    
+    支持两种模式：
+    1. 内容模式：分析MGX提供的内容数据
+    2. URL模式：直接分析真实网站URL
+    
+    将SEO分析结果转换为MGX可理解和执行的具体优化指导：
+    - 内容优化建议（标题、描述、内容结构）
+    - 技术SEO修复指导
+    - 关键词优化策略
+    - 优先级排序和预期效果评估
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request data is required'}), 400
+        
+        print("🎯 Processing MGX SEO optimization request...")
+        
+        # 提取输入数据
+        current_content = data.get('current_content', {})
+        target_url = data.get('target_url')  # 新增：支持直接分析URL
+        seo_analysis = data.get('seo_analysis', {})
+        target_keywords = data.get('target_keywords', [])
+        website_type = data.get('website_type', 'general')
+        mgx_context = data.get('mgx_context', {})
+        
+        # 验证输入：需要提供内容或URL
+        if not current_content and not target_url:
+            return jsonify({'error': 'Either current_content or target_url is required'}), 400
+        
+        # 如果提供了URL，则分析真实网站
+        if target_url:
+            print(f"🌐 Analyzing real website: {target_url}")
+            real_analysis = analyze_real_website(target_url, target_keywords, website_type)
+            
+            if 'error' in real_analysis:
+                return jsonify({'error': f'Website analysis failed: {real_analysis["error"]}'}), 400
+            
+            current_content = real_analysis['current_content']
+            seo_analysis = real_analysis['seo_analysis']
+            
+        # 如果没有提供SEO分析，则对当前内容进行快速分析
+        elif not seo_analysis:
+            print("📊 No SEO analysis provided, performing quick analysis...")
+            quick_analysis = perform_quick_seo_analysis(current_content, target_keywords)
+            seo_analysis = quick_analysis
+        
+        # 生成优化指导
+        optimization_guide = generate_mgx_optimization_guide(
+            current_content=current_content,
+            seo_analysis=seo_analysis,
+            target_keywords=target_keywords,
+            website_type=website_type,
+            mgx_context=mgx_context
+        )
+        
+        # 计算预期改进效果
+        impact_assessment = calculate_optimization_impact(
+            current_content=current_content,
+            optimization_guide=optimization_guide,
+            seo_analysis=seo_analysis
+        )
+        
+        # 构建响应
+        response_data = {
+            'optimization_instructions': optimization_guide['instructions'],
+            'priority_order': optimization_guide['priority_order'],
+            'expected_improvements': impact_assessment,
+            'implementation_guide': optimization_guide['implementation_guide'],
+            'mgx_specific_actions': optimization_guide['mgx_actions'],
+            'meta_info': {
+                'website_type': website_type,
+                'target_keywords_count': len(target_keywords),
+                'optimization_categories': len(optimization_guide['instructions']),
+                'timestamp': datetime.now().isoformat(),
+                'api_version': '1.0'
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': response_data,
+            'message': 'MGX SEO optimization guide generated successfully'
+        })
+        
+    except Exception as e:
+        print(f"❌ MGX SEO Optimizer error: {e}")
+        return jsonify({'error': f'MGX SEO optimization failed: {str(e)}'}), 500
+
+def perform_quick_seo_analysis(current_content, target_keywords):
+    """对当前内容执行快速SEO分析"""
+    issues = []
+    score = 100
+    
+    # 分析标题
+    title = current_content.get('title', '')
+    if not title:
+        issues.append({'type': 'missing_title', 'priority': 'critical', 'impact': 'very_high'})
+        score -= 30
+    elif len(title) < 30:
+        issues.append({'type': 'title_too_short', 'current_length': len(title), 'priority': 'high', 'impact': 'high'})
+        score -= 15
+    elif len(title) > 60:
+        issues.append({'type': 'title_too_long', 'current_length': len(title), 'priority': 'medium', 'impact': 'medium'})
+        score -= 8
+    
+    # 分析描述
+    description = current_content.get('description', '')
+    if not description:
+        issues.append({'type': 'missing_description', 'priority': 'critical', 'impact': 'high'})
+        score -= 25
+    elif len(description) < 120:
+        issues.append({'type': 'description_too_short', 'current_length': len(description), 'priority': 'high', 'impact': 'medium'})
+        score -= 12
+    
+    # 分析内容结构
+    content = current_content.get('content', '')
+    headings = current_content.get('headings', [])
+    
+    if not any(h.startswith('H1') for h in headings):
+        issues.append({'type': 'missing_h1', 'priority': 'critical', 'impact': 'high'})
+        score -= 20
+    
+    h2_count = len([h for h in headings if h.startswith('H2')])
+    if h2_count < 2:
+        issues.append({'type': 'insufficient_h2', 'current_count': h2_count, 'priority': 'medium', 'impact': 'medium'})
+        score -= 10
+    
+    # 分析关键词密度
+    if target_keywords and content:
+        keyword_issues = analyze_keyword_density(content, target_keywords)
+        issues.extend(keyword_issues)
+        score -= len(keyword_issues) * 5
+    
+    # 分析内容长度
+    word_count = len(content.split()) if content else 0
+    if word_count < 300:
+        issues.append({'type': 'thin_content', 'current_word_count': word_count, 'priority': 'medium', 'impact': 'medium'})
+        score -= 15
+    
+    return {
+        'seo_score': max(0, score),
+        'issues': issues,
+        'analysis_type': 'quick_analysis',
+        'timestamp': datetime.now().isoformat()
+    }
+
+def analyze_keyword_density(content, target_keywords):
+    """分析关键词密度"""
+    issues = []
+    content_lower = content.lower()
+    word_count = len(content.split())
+    
+    for keyword in target_keywords[:5]:  # 分析前5个关键词
+        keyword_lower = keyword.lower()
+        keyword_count = content_lower.count(keyword_lower)
+        density = (keyword_count / word_count * 100) if word_count > 0 else 0
+        
+        if density < 0.5:
+            issues.append({
+                'type': 'low_keyword_density',
+                'keyword': keyword,
+                'current_density': round(density, 2),
+                'priority': 'medium',
+                'impact': 'medium'
+            })
+        elif density > 3.0:
+            issues.append({
+                'type': 'high_keyword_density',
+                'keyword': keyword,
+                'current_density': round(density, 2),
+                'priority': 'medium',
+                'impact': 'medium'
+            })
+    
+    return issues
+
+def generate_mgx_optimization_guide(current_content, seo_analysis, target_keywords, website_type, mgx_context):
+    """生成MGX专用的优化指导"""
+    instructions = {}
+    priority_order = []
+    implementation_guide = {}
+    mgx_actions = []
+    
+    issues = seo_analysis.get('issues', [])
+    current_score = seo_analysis.get('seo_score', 0)
+    
+    # 按优先级分类问题
+    critical_issues = [i for i in issues if i.get('priority') == 'critical']
+    high_issues = [i for i in issues if i.get('priority') == 'high']
+    medium_issues = [i for i in issues if i.get('priority') == 'medium']
+    
+    # 1. 标题优化
+    title_issues = [i for i in issues if 'title' in i.get('type', '')]
+    if title_issues:
+        title_optimization = generate_title_optimization(
+            current_content.get('title', ''), 
+            title_issues, 
+            target_keywords, 
+            website_type
+        )
+        instructions['title_optimization'] = title_optimization
+        priority_order.append('title_optimization')
+        mgx_actions.append({
+            'action_type': 'update_title',
+            'target_element': 'page_title',
+            'new_value': title_optimization.get('suggested'),
+            'implementation': 'direct_replacement'
+        })
+    
+    # 2. 描述优化
+    desc_issues = [i for i in issues if 'description' in i.get('type', '')]
+    if desc_issues:
+        desc_optimization = generate_description_optimization(
+            current_content.get('description', ''),
+            desc_issues,
+            target_keywords,
+            website_type
+        )
+        instructions['description_optimization'] = desc_optimization
+        priority_order.append('description_optimization')
+        mgx_actions.append({
+            'action_type': 'update_meta_description',
+            'target_element': 'meta_description',
+            'new_value': desc_optimization.get('suggested'),
+            'implementation': 'direct_replacement'
+        })
+    
+    # 3. 内容结构优化
+    structure_issues = [i for i in issues if any(keyword in i.get('type', '') for keyword in ['h1', 'h2', 'heading', 'structure'])]
+    if structure_issues:
+        structure_optimization = generate_structure_optimization(
+            current_content,
+            structure_issues,
+            target_keywords,
+            website_type
+        )
+        instructions['content_structure'] = structure_optimization
+        priority_order.append('content_structure')
+        
+        # 为每个结构改进添加MGX动作
+        for heading in structure_optimization.get('add_headings', []):
+            mgx_actions.append({
+                'action_type': 'add_heading',
+                'target_element': heading.get('level'),
+                'new_value': heading.get('suggested_text'),
+                'position': heading.get('position'),
+                'implementation': 'content_insertion'
+            })
+    
+    # 4. 内容优化
+    content_issues = [i for i in issues if any(keyword in i.get('type', '') for keyword in ['content', 'keyword', 'thin'])]
+    if content_issues:
+        content_optimization = generate_content_optimization(
+            current_content.get('content', ''),
+            content_issues,
+            target_keywords,
+            website_type
+        )
+        instructions['content_optimization'] = content_optimization
+        priority_order.append('content_optimization')
+        
+        # 添加内容扩展动作
+        for expansion in content_optimization.get('content_expansions', []):
+            mgx_actions.append({
+                'action_type': 'expand_content',
+                'target_section': expansion.get('section'),
+                'new_content': expansion.get('suggested_content'),
+                'word_count_target': expansion.get('target_words'),
+                'implementation': 'content_expansion'
+            })
+    
+    # 5. 技术SEO修复
+    technical_issues = [i for i in issues if i.get('type') not in ['title_too_short', 'title_too_long', 'description_too_short', 'missing_h1']]
+    if technical_issues:
+        technical_optimization = generate_technical_optimization(
+            current_content,
+            technical_issues,
+            website_type
+        )
+        instructions['technical_optimization'] = technical_optimization
+        priority_order.append('technical_optimization')
+        
+        for fix in technical_optimization.get('fixes', []):
+            mgx_actions.append({
+                'action_type': 'technical_fix',
+                'fix_type': fix.get('type'),
+                'target_elements': fix.get('targets'),
+                'implementation_steps': fix.get('steps'),
+                'implementation': 'technical_update'
+            })
+    
+    # 生成实施指南
+    implementation_guide = {
+        'immediate_actions': [action for action in mgx_actions if any(pri in ['critical', 'high'] for pri in [i.get('priority', 'medium') for i in issues])],
+        'secondary_actions': [action for action in mgx_actions if action not in implementation_guide.get('immediate_actions', [])],
+        'estimated_time': calculate_implementation_time(mgx_actions),
+        'difficulty_level': assess_implementation_difficulty(mgx_actions),
+        'mgx_compatibility': 'fully_compatible'  # 所有建议都是MGX可执行的
+    }
+    
+    return {
+        'instructions': instructions,
+        'priority_order': priority_order,
+        'implementation_guide': implementation_guide,
+        'mgx_actions': mgx_actions
+    }
+
+def generate_title_optimization(current_title, title_issues, target_keywords, website_type):
+    """生成标题优化建议"""
+    suggestions = []
+    current_length = len(current_title) if current_title else 0
+    
+    # 基于问题类型生成建议
+    for issue in title_issues:
+        if issue.get('type') == 'missing_title':
+            suggestions.append(f"创建包含主关键词'{target_keywords[0] if target_keywords else '核心关键词'}'的标题")
+        elif issue.get('type') == 'title_too_short':
+            needed_chars = 50 - current_length
+            suggestions.append(f"扩展标题{needed_chars}个字符，添加相关关键词和价值主张")
+        elif issue.get('type') == 'title_too_long':
+            excess_chars = current_length - 60
+            suggestions.append(f"缩短标题{excess_chars}个字符，保留核心关键词")
+    
+    # 生成具体的标题建议
+    if target_keywords:
+        main_keyword = target_keywords[0]
+        if website_type == 'ecommerce':
+            suggested_title = f"{main_keyword} - 专业{main_keyword}服务 | 品牌名"
+        elif website_type == 'blog':
+            suggested_title = f"{main_keyword}完整指南：专业建议与实用技巧"
+        else:
+            suggested_title = f"专业{main_keyword}服务 - 优质解决方案"
+    else:
+        suggested_title = current_title if current_title else "请添加包含关键词的标题"
+    
+    return {
+        'current': current_title,
+        'suggested': suggested_title,
+        'reasons': [issue.get('type') for issue in title_issues],
+        'specific_changes': suggestions,
+        'expected_improvement': '+10-15 SEO分数',
+        'implementation_priority': 'high'
+    }
+
+def generate_description_optimization(current_desc, desc_issues, target_keywords, website_type):
+    """生成描述优化建议"""
+    suggestions = []
+    current_length = len(current_desc) if current_desc else 0
+    
+    for issue in desc_issues:
+        if issue.get('type') == 'missing_description':
+            suggestions.append("创建140-160字符的吸引人描述")
+        elif issue.get('type') == 'description_too_short':
+            needed_chars = 140 - current_length
+            suggestions.append(f"扩展描述{needed_chars}个字符，添加关键词和行动号召")
+    
+    # 生成描述建议
+    if target_keywords:
+        main_keyword = target_keywords[0]
+        suggested_desc = f"专业的{main_keyword}服务，提供优质解决方案。了解更多关于{main_keyword}的信息，立即获取免费咨询。"
+    else:
+        suggested_desc = current_desc if current_desc else "请添加包含关键词的描述"
+    
+    return {
+        'current': current_desc,
+        'suggested': suggested_desc,
+        'reasons': [issue.get('type') for issue in desc_issues],
+        'specific_changes': suggestions,
+        'expected_improvement': '+8-12 SEO分数',
+        'implementation_priority': 'high'
+    }
+
+def generate_structure_optimization(current_content, structure_issues, target_keywords, website_type):
+    """生成内容结构优化建议"""
+    add_headings = []
+    content_structure_changes = []
+    
+    for issue in structure_issues:
+        if issue.get('type') == 'missing_h1':
+            main_keyword = target_keywords[0] if target_keywords else '核心主题'
+            add_headings.append({
+                'level': 'h1',
+                'suggested_text': f"{main_keyword}专业指南",
+                'position': 'page_top',
+                'reason': '每个页面必须有且仅有一个H1标签'
+            })
+        elif issue.get('type') == 'insufficient_h2':
+            current_count = issue.get('current_count', 0)
+            needed = 3 - current_count
+            for i in range(needed):
+                keyword = target_keywords[i] if i < len(target_keywords) else f"相关主题{i+1}"
+                add_headings.append({
+                    'level': 'h2',
+                    'suggested_text': f"{keyword}的重要特点",
+                    'position': f'section_{i+2}',
+                    'reason': '改善内容结构和可读性'
+                })
+    
+    return {
+        'add_headings': add_headings,
+        'structure_improvements': content_structure_changes,
+        'expected_improvement': '+5-10 SEO分数',
+        'implementation_priority': 'medium'
+    }
+
+def generate_content_optimization(current_content, content_issues, target_keywords, website_type):
+    """生成内容优化建议"""
+    content_expansions = []
+    keyword_optimizations = []
+    
+    for issue in content_issues:
+        if issue.get('type') == 'thin_content':
+            current_words = issue.get('current_word_count', 0)
+            target_words = 500
+            needed_words = target_words - current_words
+            
+            content_expansions.append({
+                'section': 'main_content',
+                'suggested_content': f"添加{needed_words}字的详细内容，包含关键词和相关信息",
+                'target_words': needed_words,
+                'focus_keywords': target_keywords[:3] if target_keywords else []
+            })
+        
+        elif issue.get('type') == 'low_keyword_density':
+            keyword = issue.get('keyword', '')
+            keyword_optimizations.append({
+                'keyword': keyword,
+                'action': 'increase_usage',
+                'suggestion': f"在内容中自然地增加2-3次'{keyword}'的使用",
+                'target_density': '1.0-2.0%'
+            })
+        
+        elif issue.get('type') == 'high_keyword_density':
+            keyword = issue.get('keyword', '')
+            keyword_optimizations.append({
+                'keyword': keyword,
+                'action': 'reduce_usage',
+                'suggestion': f"减少'{keyword}'的使用频率，使用同义词替换",
+                'target_density': '1.0-2.0%'
+            })
+    
+    return {
+        'content_expansions': content_expansions,
+        'keyword_optimizations': keyword_optimizations,
+        'expected_improvement': '+10-20 SEO分数',
+        'implementation_priority': 'medium'
+    }
+
+def generate_technical_optimization(current_content, technical_issues, website_type):
+    """生成技术SEO优化建议"""
+    fixes = []
+    
+    for issue in technical_issues:
+        if 'alt' in issue.get('type', '').lower():
+            fixes.append({
+                'type': 'add_alt_tags',
+                'targets': ['all_images'],
+                'steps': ['为每个图片添加描述性alt属性', '包含相关关键词'],
+                'priority': 'medium'
+            })
+        elif 'link' in issue.get('type', '').lower():
+            fixes.append({
+                'type': 'optimize_links',
+                'targets': ['internal_links', 'external_links'],
+                'steps': ['优化链接锚文本', '确保链接相关性'],
+                'priority': 'low'
+            })
+    
+    return {
+        'fixes': fixes,
+        'expected_improvement': '+5-8 SEO分数',
+        'implementation_priority': 'low'
+    }
+
+def calculate_implementation_time(mgx_actions):
+    """计算实施时间估算"""
+    time_mapping = {
+        'update_title': 5,
+        'update_meta_description': 5,
+        'add_heading': 10,
+        'expand_content': 30,
+        'technical_fix': 15
+    }
+    
+    total_minutes = sum(time_mapping.get(action.get('action_type'), 15) for action in mgx_actions)
+    
+    if total_minutes < 30:
+        return 'less_than_30_minutes'
+    elif total_minutes < 60:
+        return '30_to_60_minutes'
+    else:
+        return 'more_than_1_hour'
+
+def analyze_real_website(target_url, target_keywords, website_type):
+    """分析真实网站并提取内容数据"""
+    try:
+        print(f"🔍 Starting real website analysis for: {target_url}")
+        
+        # 使用我们现有的analyze函数分析真实网站
+        analysis_result = analyze(
+            url=target_url,
+            follow_links=False,  # 只分析主页
+            analyze_headings=True,
+            analyze_extra_tags=True,
+            run_llm_analysis=False,  # 快速分析，不使用LLM
+            run_professional_analysis=True  # 启用专业诊断
+        )
+        
+        if not analysis_result or not analysis_result.get('pages'):
+            return {'error': 'Failed to analyze website - no pages found'}
+        
+        page_data = analysis_result['pages'][0]
+        
+        # 提取内容数据
+        current_content = {
+            'title': page_data.get('title', ''),
+            'description': page_data.get('description', ''),
+            'content': page_data.get('content', {}).get('text', '') if page_data.get('content') else '',
+            'headings': extract_headings_from_page(page_data),
+            'meta_tags': {
+                'keywords': ','.join(kw.get('keyword', '') for kw in page_data.get('keywords', [])[:5]),
+                'author': page_data.get('author', ''),
+                'url': target_url
+            },
+            'images': page_data.get('images', []),
+            'links': {
+                'internal': page_data.get('internal_links', []),
+                'external': page_data.get('external_links', [])
+            },
+            'word_count': page_data.get('word_count', 0)
+        }
+        
+        # 生成SEO分析
+        seo_analysis = {
+            'seo_score': 0,  # 将由统一评分系统计算
+            'issues': [],
+            'analysis_type': 'real_website_analysis',
+            'timestamp': datetime.now().isoformat(),
+            'url': target_url
+        }
+        
+        # 使用统一评分系统
+        unified_score = calculate_unified_seo_score(analysis_result)
+        seo_analysis['seo_score'] = unified_score.get('score', 0)
+        
+        # 从专业诊断中提取问题
+        professional_analysis = page_data.get('professional_analysis', {})
+        if professional_analysis:
+            all_issues = professional_analysis.get('all_issues', [])
+            seo_analysis['issues'] = all_issues
+            seo_analysis['professional_score'] = professional_analysis.get('overall_score', 0)
+        
+        # 如果没有提供目标关键词，从网站内容中提取
+        if not target_keywords:
+            extracted_keywords = [kw.get('keyword', '') for kw in page_data.get('keywords', [])[:5]]
+            target_keywords = [kw for kw in extracted_keywords if kw]
+        
+        print(f"✅ Successfully analyzed {target_url}")
+        print(f"📊 SEO Score: {seo_analysis['seo_score']:.1f}")
+        print(f"🔍 Found {len(seo_analysis['issues'])} issues")
+        print(f"🎯 Target keywords: {target_keywords}")
+        
+        return {
+            'current_content': current_content,
+            'seo_analysis': seo_analysis,
+            'target_keywords': target_keywords,
+            'analysis_metadata': {
+                'analysis_time': datetime.now().isoformat(),
+                'url': target_url,
+                'content_length': len(current_content.get('content', '')),
+                'keywords_found': len(target_keywords)
+            }
+        }
+        
+    except Exception as e:
+        print(f"❌ Real website analysis error: {e}")
+        return {'error': str(e)}
+
+def extract_headings_from_page(page_data):
+    """从页面数据中提取标题结构"""
+    headings = []
+    
+    # 提取各级标题
+    headings_data = page_data.get('headings', {})
+    if isinstance(headings_data, dict):
+        for level in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+            level_headings = headings_data.get(level, [])
+            for heading in level_headings:
+                if isinstance(heading, str):
+                    headings.append(f"{level.upper()}: {heading}")
+                elif isinstance(heading, dict):
+                    heading_text = heading.get('text', heading.get('content', str(heading)))
+                    headings.append(f"{level.upper()}: {heading_text}")
+    
+    # 如果没有找到标题，检查其他可能的字段
+    if not headings:
+        h1_tags = page_data.get('h1', [])
+        h2_tags = page_data.get('h2', [])
+        
+        for h1 in h1_tags:
+            headings.append(f"H1: {h1}")
+        for h2 in h2_tags:
+            headings.append(f"H2: {h2}")
+    
+    return headings
+
+def assess_implementation_difficulty(mgx_actions):
+    """评估实施难度"""
+    difficulty_scores = {
+        'update_title': 1,
+        'update_meta_description': 1,
+        'add_heading': 2,
+        'expand_content': 3,
+        'technical_fix': 2
+    }
+    
+    avg_difficulty = sum(difficulty_scores.get(action.get('action_type'), 2) for action in mgx_actions) / len(mgx_actions) if mgx_actions else 1
+    
+    if avg_difficulty < 1.5:
+        return 'easy'
+    elif avg_difficulty < 2.5:
+        return 'medium'
+    else:
+        return 'complex'
+
+def calculate_optimization_impact(current_content, optimization_guide, seo_analysis):
+    """计算优化影响评估"""
+    current_score = seo_analysis.get('seo_score', 0)
+    
+    # 估算改进分数
+    potential_improvements = {
+        'title_optimization': 15,
+        'description_optimization': 12,
+        'content_structure': 10,
+        'content_optimization': 20,
+        'technical_optimization': 8
+    }
+    
+    total_potential = sum(
+        potential_improvements.get(category, 0) 
+        for category in optimization_guide.get('priority_order', [])
+    )
+    
+    expected_score = min(100, current_score + total_potential)
+    
+    return {
+        'current_seo_score': current_score,
+        'expected_seo_score': expected_score,
+        'potential_improvement': total_potential,
+        'score_grade_change': calculate_grade_change(current_score, expected_score),
+        'impact_categories': {
+            category: potential_improvements.get(category, 0)
+            for category in optimization_guide.get('priority_order', [])
+        },
+        'confidence_level': 'high' if total_potential > 20 else 'medium'
+    }
+
+def calculate_grade_change(current_score, expected_score):
+    """计算等级变化"""
+    def score_to_grade(score):
+        if score >= 90: return 'A+'
+        elif score >= 80: return 'A'
+        elif score >= 70: return 'B'
+        elif score >= 60: return 'C'
+        else: return 'D'
+    
+    current_grade = score_to_grade(current_score)
+    expected_grade = score_to_grade(expected_score)
+    
+    return {
+        'from': current_grade,
+        'to': expected_grade,
+        'improved': expected_grade != current_grade
+    }
+
+@app.route('/api/prompt/generate', methods=['POST'])
+def generate_seo_prompt():
+    """🚀 生成SEO内容优化prompt"""
+    try:
+        data = request.get_json()
+        
+        # 验证必需参数
+        required_fields = ['url', 'optimization_type']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({
+                    'success': False,
+                    'error': f'Missing required field: {field}'
+                }), 400
+        
+        # 解析优化类型
+        try:
+            opt_type = OptimizationType(data['optimization_type'])
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid optimization_type. Valid options: {[t.value for t in OptimizationType]}'
+            }), 400
+        
+        # 解析内容类型
+        content_type = ContentType.HOMEPAGE  # 默认值
+        if 'page_type' in data:
+            try:
+                content_type = ContentType(data['page_type'])
+            except ValueError:
+                pass
+        
+        # 构建SEO上下文
+        seo_context = SEOContext(
+            url=data['url'],
+            domain=data.get('domain', data['url'].split('/')[2] if '/' in data['url'] else data['url']),
+            page_type=content_type,
+            current_score=data.get('current_score', 70.0),
+            target_score=data.get('target_score', 90.0),
+            industry=data.get('industry', 'General'),
+            competitors=data.get('competitors', []),
+            primary_keywords=data.get('primary_keywords', []),
+            secondary_keywords=data.get('secondary_keywords', []),
+            content_length=data.get('content_length', 1000),
+            issues_detected=data.get('issues_detected', []),
+            performance_metrics=data.get('performance_metrics', {'overall_score': 80}),
+            user_intent=data.get('user_intent', 'informational')
+        )
+        
+        # 生成prompt
+        custom_requirements = data.get('custom_requirements', [])
+        prompt = prompt_generator.generate_optimization_prompt(
+            seo_context, 
+            opt_type, 
+            custom_requirements
+        )
+        
+        return jsonify({
+            'success': True,
+            'prompt': prompt,
+            'optimization_type': opt_type.value,
+            'context_summary': {
+                'url': seo_context.url,
+                'page_type': seo_context.page_type.value,
+                'current_score': seo_context.current_score,
+                'target_score': seo_context.target_score,
+                'primary_keywords': seo_context.primary_keywords
+            },
+            'generated_at': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to generate prompt: {str(e)}'
+        }), 500
+
+@app.route('/api/prompt/batch', methods=['POST'])
+def generate_batch_prompts():
+    """📦 批量生成多种类型的SEO优化prompt"""
+    try:
+        data = request.get_json()
+        
+        # 验证必需参数
+        required_fields = ['url', 'optimization_types']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({
+                    'success': False,
+                    'error': f'Missing required field: {field}'
+                }), 400
+        
+        # 解析优化类型列表
+        optimization_types = []
+        for opt_type_str in data['optimization_types']:
+            try:
+                optimization_types.append(OptimizationType(opt_type_str))
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'error': f'Invalid optimization_type: {opt_type_str}. Valid options: {[t.value for t in OptimizationType]}'
+                }), 400
+        
+        # 解析内容类型
+        content_type = ContentType.HOMEPAGE
+        if 'page_type' in data:
+            try:
+                content_type = ContentType(data['page_type'])
+            except ValueError:
+                pass
+        
+        # 构建SEO上下文
+        seo_context = SEOContext(
+            url=data['url'],
+            domain=data.get('domain', data['url'].split('/')[2] if '/' in data['url'] else data['url']),
+            page_type=content_type,
+            current_score=data.get('current_score', 70.0),
+            target_score=data.get('target_score', 90.0),
+            industry=data.get('industry', 'General'),
+            competitors=data.get('competitors', []),
+            primary_keywords=data.get('primary_keywords', []),
+            secondary_keywords=data.get('secondary_keywords', []),
+            content_length=data.get('content_length', 1000),
+            issues_detected=data.get('issues_detected', []),
+            performance_metrics=data.get('performance_metrics', {'overall_score': 80}),
+            user_intent=data.get('user_intent', 'informational')
+        )
+        
+        # 批量生成prompts
+        prompts = prompt_generator.generate_batch_prompts(seo_context, optimization_types)
+        
+        return jsonify({
+            'success': True,
+            'prompts': prompts,
+            'total_prompts': len(prompts),
+            'context_summary': {
+                'url': seo_context.url,
+                'page_type': seo_context.page_type.value,
+                'current_score': seo_context.current_score,
+                'target_score': seo_context.target_score
+            },
+            'generated_at': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to generate batch prompts: {str(e)}'
+        }), 500
+
+@app.route('/api/prompt/templates', methods=['GET'])
+def get_prompt_templates():
+    """📋 获取可用的prompt模板信息"""
+    try:
+        templates_info = {}
+        for template_id, template in prompt_generator.templates.items():
+            templates_info[template_id] = {
+                'title': template.title,
+                'optimization_type': template.optimization_type.value,
+                'priority': template.priority.value,
+                'context_requirements': template.context_requirements,
+                'success_metrics': template.success_metrics,
+                'examples': template.examples
+            }
+        
+        return jsonify({
+            'success': True,
+            'templates': templates_info,
+            'optimization_types': [t.value for t in OptimizationType],
+            'content_types': [t.value for t in ContentType],
+            'priority_levels': [p.value for p in PriorityLevel]
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to get templates: {str(e)}'
+        }), 500
+
+@app.route('/api/prompt/from-analysis', methods=['POST'])
+def generate_prompt_from_analysis():
+    """🔍 基于SEO分析结果生成优化prompt"""
+    try:
+        data = request.get_json()
+        
+        # 验证必需参数
+        if 'analysis_result' not in data or 'optimization_type' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required fields: analysis_result, optimization_type'
+            }), 400
+        
+        analysis_result = data['analysis_result']
+        
+        # 解析优化类型
+        try:
+            opt_type = OptimizationType(data['optimization_type'])
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid optimization_type. Valid options: {[t.value for t in OptimizationType]}'
+            }), 400
+        
+        # 从分析结果中提取信息构建SEO上下文
+        url = analysis_result.get('url', '')
+        
+        # 提取问题列表
+        issues_detected = []
+        if 'seo_analysis' in analysis_result:
+            seo_analysis = analysis_result['seo_analysis']
+            for category, issues in seo_analysis.get('issues', {}).items():
+                for issue in issues:
+                    issues_detected.append({
+                        'title': issue.get('title', ''),
+                        'description': issue.get('description', ''),
+                        'priority': issue.get('priority', 'medium'),
+                        'category': category
+                    })
+        
+        # 提取关键词
+        primary_keywords = []
+        if 'keywords' in analysis_result:
+            keywords_data = analysis_result['keywords']
+            if isinstance(keywords_data, dict):
+                # 如果keywords是字典格式
+                primary_keywords = keywords_data.get('primary', [])
+                if not primary_keywords:
+                    # 如果没有primary字段，尝试其他可能的字段
+                    for key in ['main', 'top', 'keywords']:
+                        if key in keywords_data and isinstance(keywords_data[key], list):
+                            primary_keywords = keywords_data[key][:5]
+                            break
+            elif isinstance(keywords_data, list):
+                # 如果keywords是列表格式
+                primary_keywords = keywords_data[:5]
+            else:
+                # 如果是其他格式，转换为列表
+                primary_keywords = [str(keywords_data)] if keywords_data else []
+        
+        # 提取性能指标
+        performance_metrics = {}
+        if 'performance' in analysis_result:
+            performance_metrics = analysis_result['performance']
+        
+        # 构建SEO上下文
+        seo_context = SEOContext(
+            url=url,
+            domain=url.split('/')[2] if '/' in url else url,
+            page_type=ContentType.HOMEPAGE,  # 可以根据URL路径智能判断
+            current_score=analysis_result.get('overall_score', 70.0),
+            target_score=data.get('target_score', 90.0),
+            industry=data.get('industry', 'General'),
+            competitors=data.get('competitors', []),
+            primary_keywords=primary_keywords,
+            secondary_keywords=data.get('secondary_keywords', []),
+            content_length=analysis_result.get('content_length', 1000),
+            issues_detected=issues_detected,
+            performance_metrics=performance_metrics,
+            user_intent=data.get('user_intent', 'informational')
+        )
+        
+        # 生成prompt
+        custom_requirements = data.get('custom_requirements', [])
+        prompt = prompt_generator.generate_optimization_prompt(
+            seo_context, 
+            opt_type, 
+            custom_requirements
+        )
+        
+        return jsonify({
+            'success': True,
+            'prompt': prompt,
+            'optimization_type': opt_type.value,
+            'issues_count': len(issues_detected),
+            'context_summary': {
+                'url': seo_context.url,
+                'current_score': seo_context.current_score,
+                'target_score': seo_context.target_score,
+                'primary_keywords': seo_context.primary_keywords,
+                'issues_detected': len(issues_detected)
+            },
+            'generated_at': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to generate prompt from analysis: {str(e)}'
+        }), 500
+
+@app.route('/api/mgx/generate-optimization-plan', methods=['POST'])
+def mgx_generate_optimization_plan():
+    """
+    🎯 MGX Ultra-Intelligent Optimization Plan Generator
+    
+    Analyzes HTML SEO reports and generates comprehensive, actionable optimization plans
+    specifically designed for MGX system execution.
+    
+    Input:
+    - html_report: Complete HTML SEO report content
+    - analysis_data: Raw SEO analysis data
+    - mgx_context: MGX-specific context and capabilities (optional)
+    
+    Output:
+    - Complete MGX optimization plan with prompt specifications
+    - Execution sequence and performance predictions
+    - MGX-compatible action specifications
+    """
+    try:
+        data = request.get_json()
+        
+        # Validate required parameters
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request data is required'
+            }), 400
+        
+        # Check for required fields
+        required_fields = ['analysis_data']
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return jsonify({
+                'success': False,
+                'error': f'Missing required fields: {", ".join(missing_fields)}'
+            }), 400
+        
+        analysis_data = data['analysis_data']
+        html_report = data.get('html_report', '')  # Optional - can generate from analysis_data
+        mgx_context = data.get('mgx_context', {})
+        
+        print("🎯 Generating MGX ultra-intelligent optimization plan...")
+        
+        # If no HTML report provided, generate a minimal one or work with analysis data directly
+        if not html_report:
+            print("📄 No HTML report provided, working directly with analysis data")
+            # For now, we'll work with the analysis data directly
+            # In the future, we could generate a minimal HTML structure if needed
+        
+        # Generate comprehensive MGX optimization plan
+        optimization_plan = mgx_prompt_optimizer.generate_mgx_optimization_plan(
+            html_report=html_report,
+            analysis_data=analysis_data,
+            mgx_context=mgx_context
+        )
+        
+        # Export in MGX-compatible format
+        mgx_export = mgx_prompt_optimizer.export_for_mgx(optimization_plan)
+        
+        # Create response
+        response_data = {
+            'optimization_plan': mgx_export,
+            'summary': {
+                'url': optimization_plan.url,
+                'domain': optimization_plan.domain,
+                'current_score': optimization_plan.current_seo_score,
+                'target_score': optimization_plan.target_seo_score,
+                'score_improvement': optimization_plan.target_seo_score - optimization_plan.current_seo_score,
+                'total_optimizations': optimization_plan.total_optimizations,
+                'estimated_completion_hours': optimization_plan.estimated_completion_time // 60,
+                'mgx_compatibility_score': optimization_plan.mgx_compatibility_score
+            },
+            'execution_preview': {
+                'critical_actions': len([p for p in optimization_plan.prompt_specifications 
+                                       if p.priority.value == 'critical']),
+                'high_priority_actions': len([p for p in optimization_plan.prompt_specifications 
+                                            if p.priority.value == 'high']),
+                'total_seo_impact': sum(p.seo_impact_score for p in optimization_plan.prompt_specifications),
+                'first_three_actions': optimization_plan.execution_sequence[:3]
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': response_data,
+            'message': f'Generated {optimization_plan.total_optimizations} MGX-optimized prompts with {optimization_plan.mgx_compatibility_score:.1f}% compatibility score'
+        })
+        
+    except Exception as e:
+        print(f"❌ MGX optimization plan generation error: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'MGX optimization plan generation failed: {str(e)}'
+        }), 500
+
+@app.route('/api/mgx/prompt-specifications', methods=['POST'])
+def mgx_get_prompt_specifications():
+    """
+    📋 MGX Prompt Specifications Extractor
+    
+    Extracts specific prompt specifications from analysis data for targeted MGX optimizations.
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'analysis_data' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'analysis_data is required'
+            }), 400
+        
+        analysis_data = data['analysis_data']
+        optimization_types = data.get('optimization_types', ['all'])  # Specific types or 'all'
+        priority_filter = data.get('priority_filter')  # Optional priority filter
+        
+        print(f"📋 Extracting MGX prompt specifications for: {optimization_types}")
+        
+        # Generate optimization plan
+        optimization_plan = mgx_prompt_optimizer.generate_mgx_optimization_plan(
+            html_report='',  # Working with analysis data only
+            analysis_data=analysis_data,
+            mgx_context=data.get('mgx_context', {})
+        )
+        
+        # Filter specifications based on request parameters
+        filtered_specs = optimization_plan.prompt_specifications
+        
+        if optimization_types != ['all']:
+            filtered_specs = [
+                spec for spec in filtered_specs 
+                if spec.action_type.value in optimization_types
+            ]
+        
+        if priority_filter:
+            filtered_specs = [
+                spec for spec in filtered_specs 
+                if spec.priority.value == priority_filter
+            ]
+        
+        # Format specifications for MGX
+        mgx_specifications = []
+        for spec in filtered_specs:
+            mgx_spec = {
+                'action_type': spec.action_type.value,
+                'priority': spec.priority.value,
+                'target_element': spec.target_element,
+                'optimization_goal': spec.optimization_goal,
+                'specific_instructions': spec.specific_instructions,
+                'success_metrics': spec.success_metrics,
+                'seo_impact_score': spec.seo_impact_score,
+                'estimated_effort_minutes': spec.estimated_effort_minutes,
+                'mgx_context': spec.mgx_context,
+                'implementation_notes': spec.implementation_notes
+            }
+            mgx_specifications.append(mgx_spec)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'prompt_specifications': mgx_specifications,
+                'total_specifications': len(mgx_specifications),
+                'filtered_from_total': len(optimization_plan.prompt_specifications),
+                'optimization_types_requested': optimization_types,
+                'priority_filter': priority_filter
+            },
+            'message': f'Extracted {len(mgx_specifications)} MGX prompt specifications'
+        })
+        
+    except Exception as e:
+        print(f"❌ MGX prompt specifications error: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'MGX prompt specifications extraction failed: {str(e)}'
+        }), 500
+
+@app.route('/api/mgx/action-types', methods=['GET'])
+def mgx_get_action_types():
+    """
+    📋 MGX Available Action Types
+    
+    Returns all available MGX action types and their descriptions.
+    """
+    try:
+        from pyseoanalyzer.mgx_prompt_optimizer import MGXActionType, OptimizationPriority
+        
+        action_types = {}
+        for action in MGXActionType:
+            action_types[action.value] = {
+                'name': action.value,
+                'description': action.name.replace('_', ' ').title(),
+                'category': 'content' if 'content' in action.value or 'title' in action.value or 'description' in action.value 
+                          else 'technical' if 'technical' in action.value or 'image' in action.value 
+                          else 'strategic'
+            }
+        
+        priorities = {}
+        for priority in OptimizationPriority:
+            priorities[priority.value] = {
+                'name': priority.value,
+                'description': priority.name.replace('_', ' ').title(),
+                'urgency_level': 5 if priority.value == 'critical' else 
+                               4 if priority.value == 'high' else
+                               3 if priority.value == 'medium' else
+                               2 if priority.value == 'low' else 1
+            }
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'action_types': action_types,
+                'priority_levels': priorities,
+                'categories': ['content', 'technical', 'strategic'],
+                'total_action_types': len(action_types)
+            },
+            'message': f'Retrieved {len(action_types)} MGX action types and {len(priorities)} priority levels'
+        })
+        
+    except Exception as e:
+        print(f"❌ MGX action types error: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Failed to retrieve MGX action types: {str(e)}'
+        }), 500
+
 if __name__ == '__main__':
-    # 根据环境变量决定是否启用调试模式
+    # Production-ready startup configuration for Render deployment
     debug_mode = os.environ.get('FLASK_ENV', 'development') == 'development'
-    port = int(os.environ.get('SEO_ANALYZER_PORT', 5000))
+    
+    # Use PORT environment variable from Render, fallback to SEO_ANALYZER_PORT or 5000
+    port = int(os.environ.get('PORT', os.environ.get('SEO_ANALYZER_PORT', 5000)))
+    
+    print(f"🚀 Starting SEO AutoPilot API server on port {port}")
+    print(f"🔧 Debug mode: {debug_mode}")
+    print(f"🌍 Environment: {os.environ.get('FLASK_ENV', 'development')}")
+    
     app.run(debug=debug_mode, host='0.0.0.0', port=port)
